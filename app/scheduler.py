@@ -1,0 +1,93 @@
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+
+from app import db
+from app.models import Schedule, Execution
+from app.runner import run_playbook
+from app.notifications import send_schedule_report
+
+scheduler = BackgroundScheduler()
+
+
+def execute_scheduled_playbook(app, schedule_id):
+    """Execute a playbook from a schedule and send notification."""
+    with app.app_context():
+        schedule = db.session.get(Schedule, schedule_id)
+        if not schedule or not schedule.enabled:
+            return
+
+        execution = Execution(
+            playbook_id=schedule.playbook_id,
+            hosts_pattern=schedule.hosts_pattern,
+            status="pending",
+        )
+        db.session.add(execution)
+        db.session.commit()
+
+        run_playbook(app, execution.id)
+
+        # Reload execution after run
+        execution = db.session.get(Execution, execution.id)
+        if schedule.notify_email:
+            send_schedule_report(app, execution, schedule.notify_email)
+
+
+def load_schedules(app):
+    """Load all enabled schedules from the database into the scheduler."""
+    with app.app_context():
+        # Remove existing playbook jobs
+        for job in scheduler.get_jobs():
+            if job.id.startswith("schedule_"):
+                job.remove()
+
+        schedules = Schedule.query.filter_by(enabled=True).all()
+        for s in schedules:
+            add_schedule_job(app, s)
+
+
+def add_schedule_job(app, schedule):
+    """Add a single schedule job to the scheduler."""
+    job_id = f"schedule_{schedule.id}"
+
+    # Remove existing job if any
+    existing = scheduler.get_job(job_id)
+    if existing:
+        existing.remove()
+
+    if not schedule.enabled:
+        return
+
+    parts = schedule.cron_expression.split()
+    if len(parts) != 5:
+        return
+
+    trigger = CronTrigger(
+        minute=parts[0],
+        hour=parts[1],
+        day=parts[2],
+        month=parts[3],
+        day_of_week=parts[4],
+    )
+
+    scheduler.add_job(
+        execute_scheduled_playbook,
+        trigger=trigger,
+        id=job_id,
+        args=[app, schedule.id],
+        replace_existing=True,
+    )
+
+
+def remove_schedule_job(schedule_id):
+    """Remove a schedule job from the scheduler."""
+    job_id = f"schedule_{schedule_id}"
+    existing = scheduler.get_job(job_id)
+    if existing:
+        existing.remove()
+
+
+def init_scheduler(app):
+    """Initialize and start the APScheduler."""
+    if not scheduler.running:
+        scheduler.start()
+    load_schedules(app)

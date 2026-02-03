@@ -1,0 +1,66 @@
+body {
+    background-color: #f4f6f9;
+}
+
+.navbar-brand {
+    font-weight: 700;
+    font-size: 1.3rem;
+}
+
+.nav-link {
+    transition: background-color 0.2s;
+    border-radius: 4px;
+    margin: 0 2px;
+    padding: 8px 14px !important;
+}
+
+.nav-link:hover,
+.nav-link.active {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+.table th {
+    white-space: nowrap;
+}
+
+.playbook-card {
+    transition: transform 0.15s, box-shadow 0.15s;
+    cursor: default;
+}
+
+.playbook-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.status-badge {
+    font-size: 0.85rem;
+}
+
+.CodeMirror {
+    height: auto;
+    min-height: 300px;
+    max-height: 60vh;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+
+pre#execution-output {
+    font-size: 0.85rem;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.modal-xl {
+    max-width: 90%;
+}
+
+.btn-group-sm > .btn {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.8rem;
+}
+
+.empty-state {
+    padding: 3rem;
+}

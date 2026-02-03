@@ -17,7 +17,7 @@
         <a class="navbar-brand" href="#">
             <i class="bi bi-terminal"></i> Ansible GUI
         </a>
-        <div class="navbar-nav">
+        <div class="navbar-nav me-auto">
             <a class="nav-link active" href="#" data-tab="inventory">
                 <i class="bi bi-hdd-network"></i> Inventaire
             </a>
@@ -30,12 +30,23 @@
             <a class="nav-link" href="#" data-tab="schedules">
                 <i class="bi bi-clock-history"></i> Planification
             </a>
+            <a class="nav-link" href="#" data-tab="settings">
+                <i class="bi bi-gear"></i> Paramètres
+            </a>
+        </div>
+        <div class="navbar-nav">
+            <span class="nav-link text-light pe-3">
+                <i class="bi bi-person-circle"></i> {{ user }}
+            </span>
+            <a class="nav-link text-warning" href="/logout">
+                <i class="bi bi-box-arrow-right"></i> Déconnexion
+            </a>
         </div>
     </div>
 </nav>
 
 <div class="container-fluid mt-3">
-    <!-- ═══════════════════ INVENTORY TAB ═══════════════════ -->
+    <!-- INVENTORY TAB -->
     <div id="tab-inventory" class="tab-content-section">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h3><i class="bi bi-hdd-network"></i> Inventaire des hôtes</h3>
@@ -65,7 +76,7 @@
         </div>
     </div>
 
-    <!-- ═══════════════════ PLAYBOOKS TAB ═══════════════════ -->
+    <!-- PLAYBOOKS TAB -->
     <div id="tab-playbooks" class="tab-content-section d-none">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h3><i class="bi bi-file-earmark-code"></i> Playbooks</h3>
@@ -80,7 +91,7 @@
         </div>
     </div>
 
-    <!-- ═══════════════════ EXECUTIONS TAB ═══════════════════ -->
+    <!-- EXECUTIONS TAB -->
     <div id="tab-executions" class="tab-content-section d-none">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h3><i class="bi bi-play-circle"></i> Historique des exécutions</h3>
@@ -106,7 +117,7 @@
         </div>
     </div>
 
-    <!-- ═══════════════════ SCHEDULES TAB ═══════════════════ -->
+    <!-- SCHEDULES TAB -->
     <div id="tab-schedules" class="tab-content-section d-none">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h3><i class="bi bi-clock-history"></i> Planification</h3>
@@ -130,9 +141,69 @@
             </table>
         </div>
     </div>
+
+    <!-- SETTINGS TAB -->
+    <div id="tab-settings" class="tab-content-section d-none">
+        <h3 class="mb-4"><i class="bi bi-gear"></i> Paramètres</h3>
+
+        <div class="row">
+            <!-- LDAP / Active Directory -->
+            <div class="col-lg-6 mb-4">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="bi bi-shield-lock"></i> Active Directory / LDAP</h5>
+                    </div>
+                    <div class="card-body" id="settings-ldap-fields"></div>
+                    <div class="card-footer d-flex gap-2">
+                        <button class="btn btn-primary" onclick="saveSettings('ldap')">
+                            <i class="bi bi-check-lg"></i> Enregistrer
+                        </button>
+                        <button class="btn btn-outline-secondary" onclick="testLdap()">
+                            <i class="bi bi-plug"></i> Tester la connexion
+                        </button>
+                        <span id="ldap-test-result" class="align-self-center ms-2"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SMTP -->
+            <div class="col-lg-6 mb-4">
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0"><i class="bi bi-envelope"></i> Serveur SMTP</h5>
+                    </div>
+                    <div class="card-body" id="settings-smtp-fields"></div>
+                    <div class="card-footer d-flex gap-2">
+                        <button class="btn btn-success" onclick="saveSettings('smtp')">
+                            <i class="bi bi-check-lg"></i> Enregistrer
+                        </button>
+                        <button class="btn btn-outline-secondary" onclick="testSmtp()">
+                            <i class="bi bi-plug"></i> Tester la connexion
+                        </button>
+                        <span id="smtp-test-result" class="align-self-center ms-2"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- General -->
+            <div class="col-lg-6 mb-4">
+                <div class="card">
+                    <div class="card-header bg-secondary text-white">
+                        <h5 class="mb-0"><i class="bi bi-sliders"></i> Général</h5>
+                    </div>
+                    <div class="card-body" id="settings-general-fields"></div>
+                    <div class="card-footer">
+                        <button class="btn btn-secondary" onclick="saveSettings('general')">
+                            <i class="bi bi-check-lg"></i> Enregistrer
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
-<!-- ═══════════════════ HOST MODAL ═══════════════════ -->
+<!-- HOST MODAL -->
 <div class="modal fade" id="hostModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -181,7 +252,7 @@
     </div>
 </div>
 
-<!-- ═══════════════════ PLAYBOOK MODAL ═══════════════════ -->
+<!-- PLAYBOOK MODAL -->
 <div class="modal fade" id="playbookModal" tabindex="-1">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
@@ -214,7 +285,7 @@
     </div>
 </div>
 
-<!-- ═══════════════════ RUN MODAL ═══════════════════ -->
+<!-- RUN MODAL -->
 <div class="modal fade" id="runModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -244,7 +315,7 @@
     </div>
 </div>
 
-<!-- ═══════════════════ OUTPUT MODAL ═══════════════════ -->
+<!-- OUTPUT MODAL -->
 <div class="modal fade" id="outputModal" tabindex="-1">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
@@ -259,7 +330,7 @@
     </div>
 </div>
 
-<!-- ═══════════════════ SCHEDULE MODAL ═══════════════════ -->
+<!-- SCHEDULE MODAL -->
 <div class="modal fade" id="scheduleModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -303,7 +374,7 @@
     </div>
 </div>
 
-<!-- ═══════════════════ TOAST ═══════════════════ -->
+<!-- TOAST -->
 <div class="position-fixed bottom-0 end-0 p-3" style="z-index:11">
     <div id="toast" class="toast align-items-center text-white border-0" role="alert">
         <div class="d-flex">

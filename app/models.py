@@ -78,6 +78,37 @@ class Execution(db.Model):
         }
 
 
+class Setting(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(128), unique=True, nullable=False, index=True)
+    value = db.Column(db.Text, default="")
+    category = db.Column(db.String(64), default="general")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "key": self.key,
+            "value": self.value,
+            "category": self.category,
+        }
+
+    @staticmethod
+    def get(key, default=""):
+        setting = Setting.query.filter_by(key=key).first()
+        return setting.value if setting else default
+
+    @staticmethod
+    def set(key, value, category="general"):
+        setting = Setting.query.filter_by(key=key).first()
+        if setting:
+            setting.value = value
+        else:
+            setting = Setting(key=key, value=value, category=category)
+            db.session.add(setting)
+        db.session.commit()
+        return setting
+
+
 class Schedule(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     playbook_id = db.Column(db.Integer, db.ForeignKey("playbook.id"), nullable=False)

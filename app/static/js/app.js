@@ -2,6 +2,8 @@
 // State & Helpers
 // ──────────────────────────────────────────────
 let cmEditor = null;
+let settingsSchema = {};
+let settingsValues = {};
 
 function api(method, url, data) {
     const opts = {
@@ -10,6 +12,10 @@ function api(method, url, data) {
     };
     if (data) opts.body = JSON.stringify(data);
     return fetch(url, opts).then(async (r) => {
+        if (r.status === 401) {
+            window.location.href = "/login";
+            throw new Error("Session expirée");
+        }
         const json = await r.json();
         if (!r.ok) throw new Error(json.error || "Erreur serveur");
         return json;
@@ -51,12 +57,12 @@ document.querySelectorAll("[data-tab]").forEach((link) => {
         document.querySelectorAll(".tab-content-section").forEach((s) => s.classList.add("d-none"));
         document.getElementById("tab-" + link.dataset.tab).classList.remove("d-none");
 
-        // Load data for the active tab
         const tab = link.dataset.tab;
         if (tab === "inventory") loadHosts();
         else if (tab === "playbooks") loadPlaybooks();
         else if (tab === "executions") loadExecutions();
         else if (tab === "schedules") loadSchedules();
+        else if (tab === "settings") loadSettings();
     });
 });
 
@@ -216,7 +222,6 @@ function showPlaybookModal(playbook = null) {
     const modal = new bootstrap.Modal(document.getElementById("playbookModal"));
     modal.show();
 
-    // Initialize CodeMirror after modal is shown
     document.getElementById("playbookModal").addEventListener(
         "shown.bs.modal",
         function initCM() {
@@ -316,7 +321,6 @@ function executePlaybook() {
         .then(() => {
             bootstrap.Modal.getInstance(document.getElementById("runModal")).hide();
             showToast("Playbook lancé en arrière-plan");
-            // Switch to executions tab
             document.querySelector('[data-tab="executions"]').click();
         })
         .catch((e) => showToast(e.message, "danger"));
@@ -392,7 +396,6 @@ function showScheduleModal() {
     document.getElementById("schedule-description").value = "";
     document.getElementById("schedule-enabled").checked = true;
 
-    // Load playbooks into select
     api("GET", "/api/playbooks").then((playbooks) => {
         const select = document.getElementById("schedule-playbook");
         select.innerHTML = playbooks
@@ -444,6 +447,114 @@ function deleteSchedule(id) {
             loadSchedules();
         })
         .catch((e) => showToast(e.message, "danger"));
+}
+
+// ──────────────────────────────────────────────
+// SETTINGS
+// ──────────────────────────────────────────────
+function loadSettings() {
+    Promise.all([api("GET", "/api/settings/schema"), api("GET", "/api/settings")]).then(
+        ([schema, values]) => {
+            settingsSchema = schema;
+            settingsValues = values;
+            renderSettingsCategory("ldap");
+            renderSettingsCategory("smtp");
+            renderSettingsCategory("general");
+        }
+    );
+}
+
+function renderSettingsCategory(category) {
+    const container = document.getElementById(`settings-${category}-fields`);
+    if (!container || !settingsSchema[category]) return;
+
+    container.innerHTML = settingsSchema[category]
+        .map((field) => {
+            const val = settingsValues[field.key] || "";
+
+            if (field.type === "checkbox") {
+                const checked = val === "true" ? "checked" : "";
+                return `
+                <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" id="setting-${field.key}" ${checked}
+                           data-setting-key="${field.key}">
+                    <label class="form-check-label" for="setting-${field.key}">${esc(field.label)}</label>
+                </div>`;
+            }
+
+            const inputType = field.type === "password" ? "password" : field.type === "number" ? "number" : "text";
+            return `
+            <div class="mb-3">
+                <label class="form-label" for="setting-${field.key}">${esc(field.label)}</label>
+                <input type="${inputType}" class="form-control" id="setting-${field.key}"
+                       placeholder="${esc(field.placeholder)}" value="${esc(val)}"
+                       data-setting-key="${field.key}">
+            </div>`;
+        })
+        .join("");
+}
+
+function collectSettingsCategory(category) {
+    const data = {};
+    if (!settingsSchema[category]) return data;
+
+    settingsSchema[category].forEach((field) => {
+        const el = document.getElementById(`setting-${field.key}`);
+        if (!el) return;
+
+        if (field.type === "checkbox") {
+            data[field.key] = el.checked ? "true" : "false";
+        } else {
+            data[field.key] = el.value;
+        }
+    });
+    return data;
+}
+
+function saveSettings(category) {
+    const data = collectSettingsCategory(category);
+    api("PUT", "/api/settings", data)
+        .then(() => showToast("Paramètres enregistrés"))
+        .catch((e) => showToast(e.message, "danger"));
+}
+
+function testLdap() {
+    const resultEl = document.getElementById("ldap-test-result");
+    resultEl.innerHTML = '<span class="text-muted">Test en cours...</span>';
+
+    // Save first, then test
+    const data = collectSettingsCategory("ldap");
+    api("PUT", "/api/settings", data)
+        .then(() => api("POST", "/api/settings/test-ldap"))
+        .then((r) => {
+            if (r.success) {
+                resultEl.innerHTML = `<span class="text-success"><i class="bi bi-check-circle"></i> ${esc(r.message)}</span>`;
+            } else {
+                resultEl.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle"></i> ${esc(r.message)}</span>`;
+            }
+        })
+        .catch((e) => {
+            resultEl.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle"></i> ${esc(e.message)}</span>`;
+        });
+}
+
+function testSmtp() {
+    const resultEl = document.getElementById("smtp-test-result");
+    resultEl.innerHTML = '<span class="text-muted">Test en cours...</span>';
+
+    const data = collectSettingsCategory("smtp");
+    api("PUT", "/api/settings", data)
+        .then(() => api("POST", "/api/settings/test-smtp"))
+        .then((r) => {
+            if (r.success) {
+                resultEl.innerHTML = `<span class="text-success"><i class="bi bi-check-circle"></i> ${esc(r.message)}</span>`;
+            } else {
+                resultEl.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle"></i> ${esc(r.message)}</span>`;
+            }
+        })
+        .catch((e) => {
+            resultEl.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle"></i> ${esc(e.message)}</span>`;
+        });
 }
 
 // ──────────────────────────────────────────────

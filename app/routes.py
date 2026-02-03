@@ -1,34 +1,70 @@
 import threading
-from flask import Blueprint, request, jsonify, render_template, current_app
+from flask import Blueprint, request, jsonify, render_template, current_app, session, redirect, url_for
 
 from app import db
-from app.models import Host, Playbook, Execution, Schedule
+from app.models import Host, Playbook, Execution, Schedule, Setting
 from app.runner import run_playbook
 from app.notifications import send_execution_report
 from app.scheduler import add_schedule_job, remove_schedule_job
+from app.auth import login_required, authenticate_ldap
 
 main_bp = Blueprint("main", __name__)
 api_bp = Blueprint("api", __name__)
 
 
 # ──────────────────────────────────────────────
+# Authentication
+# ──────────────────────────────────────────────
+@main_bp.route("/login", methods=["GET", "POST"])
+def login():
+    if session.get("authenticated"):
+        return redirect(url_for("main.index"))
+
+    error = None
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+
+        success, display_name, err = authenticate_ldap(username, password)
+        if success:
+            session["authenticated"] = True
+            session["username"] = username
+            session["display_name"] = display_name
+            session.permanent = True
+            return redirect(url_for("main.index"))
+        else:
+            error = err
+
+    return render_template("login.html", error=error)
+
+
+@main_bp.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("main.login"))
+
+
+# ──────────────────────────────────────────────
 # Pages
 # ──────────────────────────────────────────────
 @main_bp.route("/")
+@login_required
 def index():
-    return render_template("index.html")
+    return render_template("index.html", user=session.get("display_name", session.get("username", "")))
 
 
 # ──────────────────────────────────────────────
 # Hosts API
 # ──────────────────────────────────────────────
 @api_bp.route("/hosts", methods=["GET"])
+@login_required
 def list_hosts():
     hosts = Host.query.order_by(Host.group_name, Host.hostname).all()
     return jsonify([h.to_dict() for h in hosts])
 
 
 @api_bp.route("/hosts", methods=["POST"])
+@login_required
 def create_host():
     data = request.get_json()
     if not data or not data.get("hostname") or not data.get("ip_address"):
@@ -49,6 +85,7 @@ def create_host():
 
 
 @api_bp.route("/hosts/<int:host_id>", methods=["GET"])
+@login_required
 def get_host(host_id):
     host = db.session.get(Host, host_id)
     if not host:
@@ -57,6 +94,7 @@ def get_host(host_id):
 
 
 @api_bp.route("/hosts/<int:host_id>", methods=["PUT"])
+@login_required
 def update_host(host_id):
     host = db.session.get(Host, host_id)
     if not host:
@@ -75,6 +113,7 @@ def update_host(host_id):
 
 
 @api_bp.route("/hosts/<int:host_id>", methods=["DELETE"])
+@login_required
 def delete_host(host_id):
     host = db.session.get(Host, host_id)
     if not host:
@@ -86,6 +125,7 @@ def delete_host(host_id):
 
 
 @api_bp.route("/hosts/groups", methods=["GET"])
+@login_required
 def list_groups():
     groups = db.session.query(Host.group_name).distinct().all()
     return jsonify([g[0] for g in groups])
@@ -95,12 +135,14 @@ def list_groups():
 # Playbooks API
 # ──────────────────────────────────────────────
 @api_bp.route("/playbooks", methods=["GET"])
+@login_required
 def list_playbooks():
     playbooks = Playbook.query.order_by(Playbook.name).all()
     return jsonify([p.to_dict() for p in playbooks])
 
 
 @api_bp.route("/playbooks", methods=["POST"])
+@login_required
 def create_playbook():
     data = request.get_json()
     if not data or not data.get("name") or not data.get("content"):
@@ -117,6 +159,7 @@ def create_playbook():
 
 
 @api_bp.route("/playbooks/<int:playbook_id>", methods=["GET"])
+@login_required
 def get_playbook(playbook_id):
     playbook = db.session.get(Playbook, playbook_id)
     if not playbook:
@@ -125,6 +168,7 @@ def get_playbook(playbook_id):
 
 
 @api_bp.route("/playbooks/<int:playbook_id>", methods=["PUT"])
+@login_required
 def update_playbook(playbook_id):
     playbook = db.session.get(Playbook, playbook_id)
     if not playbook:
@@ -143,6 +187,7 @@ def update_playbook(playbook_id):
 
 
 @api_bp.route("/playbooks/<int:playbook_id>", methods=["DELETE"])
+@login_required
 def delete_playbook(playbook_id):
     playbook = db.session.get(Playbook, playbook_id)
     if not playbook:
@@ -157,12 +202,14 @@ def delete_playbook(playbook_id):
 # Executions API
 # ──────────────────────────────────────────────
 @api_bp.route("/executions", methods=["GET"])
+@login_required
 def list_executions():
     executions = Execution.query.order_by(Execution.created_at.desc()).limit(100).all()
     return jsonify([e.to_dict() for e in executions])
 
 
 @api_bp.route("/executions", methods=["POST"])
+@login_required
 def create_execution():
     data = request.get_json()
     if not data or not data.get("playbook_id"):
@@ -198,6 +245,7 @@ def create_execution():
 
 
 @api_bp.route("/executions/<int:execution_id>", methods=["GET"])
+@login_required
 def get_execution(execution_id):
     execution = db.session.get(Execution, execution_id)
     if not execution:
@@ -209,12 +257,14 @@ def get_execution(execution_id):
 # Schedules API
 # ──────────────────────────────────────────────
 @api_bp.route("/schedules", methods=["GET"])
+@login_required
 def list_schedules():
     schedules = Schedule.query.order_by(Schedule.created_at.desc()).all()
     return jsonify([s.to_dict() for s in schedules])
 
 
 @api_bp.route("/schedules", methods=["POST"])
+@login_required
 def create_schedule():
     data = request.get_json()
     if not data or not data.get("playbook_id") or not data.get("cron_expression"):
@@ -246,6 +296,7 @@ def create_schedule():
 
 
 @api_bp.route("/schedules/<int:schedule_id>", methods=["PUT"])
+@login_required
 def update_schedule(schedule_id):
     schedule = db.session.get(Schedule, schedule_id)
     if not schedule:
@@ -271,6 +322,7 @@ def update_schedule(schedule_id):
 
 
 @api_bp.route("/schedules/<int:schedule_id>", methods=["DELETE"])
+@login_required
 def delete_schedule(schedule_id):
     schedule = db.session.get(Schedule, schedule_id)
     if not schedule:
@@ -280,3 +332,153 @@ def delete_schedule(schedule_id):
     db.session.delete(schedule)
     db.session.commit()
     return jsonify({"message": "Schedule deleted"})
+
+
+# ──────────────────────────────────────────────
+# Settings API
+# ──────────────────────────────────────────────
+SETTINGS_SCHEMA = {
+    "ldap": [
+        {"key": "ldap_server", "label": "Serveur LDAP / AD", "placeholder": "ldap.example.com", "type": "text"},
+        {"key": "ldap_port", "label": "Port", "placeholder": "389", "type": "number"},
+        {"key": "ldap_use_ssl", "label": "Utiliser SSL (LDAPS)", "placeholder": "false", "type": "checkbox"},
+        {"key": "ldap_bind_dn", "label": "Bind DN (compte de service)", "placeholder": "CN=svc_ansible,OU=Services,DC=example,DC=com", "type": "text"},
+        {"key": "ldap_bind_password", "label": "Bind Password", "placeholder": "", "type": "password"},
+        {"key": "ldap_search_base", "label": "Base de recherche", "placeholder": "DC=example,DC=com", "type": "text"},
+        {"key": "ldap_user_filter", "label": "Filtre utilisateur", "placeholder": "(sAMAccountName={username})", "type": "text"},
+        {"key": "ldap_require_group", "label": "Groupe requis (optionnel)", "placeholder": "CN=AnsibleAdmins,OU=Groups,DC=example,DC=com", "type": "text"},
+        {"key": "ldap_group_attribute", "label": "Attribut groupe", "placeholder": "memberOf", "type": "text"},
+    ],
+    "smtp": [
+        {"key": "smtp_server", "label": "Serveur SMTP", "placeholder": "smtp.gmail.com", "type": "text"},
+        {"key": "smtp_port", "label": "Port SMTP", "placeholder": "587", "type": "number"},
+        {"key": "smtp_use_tls", "label": "Utiliser TLS", "placeholder": "true", "type": "checkbox"},
+        {"key": "smtp_username", "label": "Utilisateur SMTP", "placeholder": "user@gmail.com", "type": "text"},
+        {"key": "smtp_password", "label": "Mot de passe SMTP", "placeholder": "", "type": "password"},
+        {"key": "smtp_sender", "label": "Expéditeur", "placeholder": "ansible-gui@example.com", "type": "text"},
+        {"key": "smtp_default_recipient", "label": "Destinataire par défaut", "placeholder": "admin@example.com", "type": "text"},
+    ],
+    "general": [
+        {"key": "app_name", "label": "Nom de l'application", "placeholder": "Ansible GUI", "type": "text"},
+        {"key": "ansible_timeout", "label": "Timeout exécution (secondes)", "placeholder": "3600", "type": "number"},
+    ],
+}
+
+# Keys that should be masked when returned
+SENSITIVE_KEYS = {"ldap_bind_password", "smtp_password"}
+
+
+@api_bp.route("/settings/schema", methods=["GET"])
+@login_required
+def get_settings_schema():
+    return jsonify(SETTINGS_SCHEMA)
+
+
+@api_bp.route("/settings", methods=["GET"])
+@login_required
+def get_settings():
+    settings = Setting.query.all()
+    result = {}
+    for s in settings:
+        if s.key in SENSITIVE_KEYS and s.value:
+            result[s.key] = "********"
+        else:
+            result[s.key] = s.value
+    return jsonify(result)
+
+
+@api_bp.route("/settings", methods=["PUT"])
+@login_required
+def update_settings():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+
+    # Determine category from keys
+    all_keys = {}
+    for category, fields in SETTINGS_SCHEMA.items():
+        for field in fields:
+            all_keys[field["key"]] = category
+
+    for key, value in data.items():
+        if key not in all_keys:
+            continue
+        # Don't overwrite password with masked value
+        if key in SENSITIVE_KEYS and value == "********":
+            continue
+        Setting.set(key, str(value), category=all_keys[key])
+
+    return jsonify({"message": "Paramètres enregistrés"})
+
+
+@api_bp.route("/settings/test-ldap", methods=["POST"])
+@login_required
+def test_ldap():
+    """Test LDAP connection with current settings."""
+    from ldap3 import Server, Connection, ALL
+    cfg_keys = ["ldap_server", "ldap_port", "ldap_use_ssl", "ldap_bind_dn", "ldap_bind_password", "ldap_search_base"]
+    cfg = {}
+    for k in cfg_keys:
+        cfg[k] = Setting.get(k, "")
+
+    if not cfg["ldap_server"]:
+        return jsonify({"success": False, "message": "Serveur LDAP non renseigné"}), 400
+
+    try:
+        server = Server(
+            cfg["ldap_server"],
+            port=int(cfg["ldap_port"] or 389),
+            use_ssl=cfg["ldap_use_ssl"].lower() == "true",
+            get_info=ALL,
+        )
+        if cfg["ldap_bind_dn"]:
+            conn = Connection(server, user=cfg["ldap_bind_dn"], password=cfg["ldap_bind_password"])
+            if not conn.bind():
+                return jsonify({"success": False, "message": f"Échec du bind : {conn.result}"})
+        else:
+            conn = Connection(server)
+            if not conn.bind():
+                return jsonify({"success": False, "message": f"Échec de la connexion anonyme : {conn.result}"})
+
+        info = str(server.info) if server.info else "Connecté"
+        conn.unbind()
+        return jsonify({"success": True, "message": f"Connexion réussie. {info[:200]}"})
+
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)})
+
+
+@api_bp.route("/settings/test-smtp", methods=["POST"])
+@login_required
+def test_smtp():
+    """Test SMTP connection with current settings."""
+    import smtplib
+
+    server_addr = Setting.get("smtp_server", "")
+    port = int(Setting.get("smtp_port", "587") or 587)
+    use_tls = Setting.get("smtp_use_tls", "true").lower() == "true"
+    username = Setting.get("smtp_username", "")
+    password = Setting.get("smtp_password", "")
+
+    if not server_addr:
+        return jsonify({"success": False, "message": "Serveur SMTP non renseigné"}), 400
+
+    try:
+        smtp = smtplib.SMTP(server_addr, port, timeout=10)
+        if use_tls:
+            smtp.starttls()
+        if username and password:
+            smtp.login(username, password)
+        smtp.quit()
+        return jsonify({"success": True, "message": "Connexion SMTP réussie"})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)})
+
+
+@api_bp.route("/auth/me", methods=["GET"])
+@login_required
+def auth_me():
+    return jsonify({
+        "username": session.get("username", ""),
+        "display_name": session.get("display_name", ""),
+    })

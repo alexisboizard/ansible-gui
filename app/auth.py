@@ -84,7 +84,7 @@ def get_ldap_settings():
     """Read LDAP/AD settings from the database."""
     return {
         "server": Setting.get("ldap_server", ""),
-        "port": int(Setting.get("ldap_port", "389")),
+        "port": int(Setting.get("ldap_port", "389") or 389),
         "use_ssl": Setting.get("ldap_use_ssl", "false").lower() == "true",
         "bind_dn": Setting.get("ldap_bind_dn", ""),
         "bind_password": Setting.get("ldap_bind_password", ""),

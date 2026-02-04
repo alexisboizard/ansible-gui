@@ -60,6 +60,9 @@ def run_playbook(app, execution_id):
         work_dir = app.config["ANSIBLE_WORK_DIR"]
         os.makedirs(work_dir, exist_ok=True)
 
+        inventory_path = None
+        playbook_path = None
+
         try:
             inventory = generate_inventory(app, execution.hosts_pattern)
             inventory_path = os.path.join(work_dir, f"inventory_{execution_id}.yml")
@@ -107,9 +110,10 @@ def run_playbook(app, execution_id):
 
             # Cleanup temp files
             for path in [inventory_path, playbook_path]:
-                try:
-                    os.remove(path)
-                except OSError:
-                    pass
+                if path:
+                    try:
+                        os.remove(path)
+                    except OSError:
+                        pass
 
         return execution

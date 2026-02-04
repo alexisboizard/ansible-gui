@@ -50,9 +50,17 @@
     <div id="tab-inventory" class="tab-content-section">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h3><i class="bi bi-hdd-network"></i> Inventaire des hôtes</h3>
-            <button class="btn btn-success" onclick="showHostModal()">
-                <i class="bi bi-plus-lg"></i> Ajouter un hôte
-            </button>
+            <div class="d-flex gap-2">
+                <div class="input-group" style="width:300px;">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="text" class="form-control" id="hosts-search"
+                           placeholder="Rechercher (nom, IP, groupe...)"
+                           oninput="filterHosts()">
+                </div>
+                <button class="btn btn-success" onclick="showHostModal()">
+                    <i class="bi bi-plus-lg"></i> Ajouter un hôte
+                </button>
+            </div>
         </div>
         <div class="table-responsive">
             <table class="table table-striped table-hover">
@@ -95,9 +103,23 @@
     <div id="tab-executions" class="tab-content-section d-none">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h3><i class="bi bi-play-circle"></i> Historique des exécutions</h3>
-            <button class="btn btn-primary" onclick="loadExecutions()">
-                <i class="bi bi-arrow-clockwise"></i> Rafraîchir
-            </button>
+            <div class="d-flex gap-2">
+                <button class="btn btn-primary" onclick="loadExecutions()">
+                    <i class="bi bi-arrow-clockwise"></i> Rafraîchir
+                </button>
+                <div class="dropdown">
+                    <button class="btn btn-outline-danger dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <i class="bi bi-trash"></i> Purger
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="#" onclick="purgeExecutions('completed')">Terminées (succès + échecs)</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="purgeExecutions('7days')">Plus de 7 jours</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="purgeExecutions('30days')">Plus de 30 jours</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item text-danger" href="#" onclick="purgeExecutions('all')">Tout supprimer</a></li>
+                    </ul>
+                </div>
+            </div>
         </div>
         <div class="table-responsive">
             <table class="table table-striped table-hover">

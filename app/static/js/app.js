@@ -4,6 +4,7 @@
 let cmEditor = null;
 let settingsSchema = {};
 let settingsValues = {};
+let allHosts = [];
 
 function api(method, url, data) {
     const opts = {
@@ -71,38 +72,59 @@ document.querySelectorAll("[data-tab]").forEach((link) => {
 // ──────────────────────────────────────────────
 function loadHosts() {
     api("GET", "/api/hosts").then((hosts) => {
-        const tbody = document.getElementById("hosts-table");
-        const empty = document.getElementById("hosts-empty");
-        if (hosts.length === 0) {
-            tbody.innerHTML = "";
-            empty.classList.remove("d-none");
-            return;
-        }
-        empty.classList.add("d-none");
-        tbody.innerHTML = hosts
-            .map(
-                (h) => `
-            <tr>
-                <td><strong>${esc(h.hostname)}</strong></td>
-                <td><code>${esc(h.ip_address)}</code></td>
-                <td>${h.port}</td>
-                <td>${esc(h.username)}</td>
-                <td><span class="badge bg-info">${esc(h.group_name)}</span></td>
-                <td>${esc(h.description)}</td>
-                <td>
-                    <div class="btn-group btn-group-sm">
-                        <button class="btn btn-outline-primary" onclick="editHost(${h.id})" title="Modifier">
-                            <i class="bi bi-pencil"></i>
-                        </button>
-                        <button class="btn btn-outline-danger" onclick="deleteHost(${h.id})" title="Supprimer">
-                            <i class="bi bi-trash"></i>
-                        </button>
-                    </div>
-                </td>
-            </tr>`
-            )
-            .join("");
+        allHosts = hosts;
+        renderHosts(hosts);
     });
+}
+
+function renderHosts(hosts) {
+    const tbody = document.getElementById("hosts-table");
+    const empty = document.getElementById("hosts-empty");
+    if (hosts.length === 0) {
+        tbody.innerHTML = "";
+        empty.classList.remove("d-none");
+        return;
+    }
+    empty.classList.add("d-none");
+    tbody.innerHTML = hosts
+        .map(
+            (h) => `
+        <tr>
+            <td><strong>${esc(h.hostname)}</strong></td>
+            <td><code>${esc(h.ip_address)}</code></td>
+            <td>${h.port}</td>
+            <td>${esc(h.username)}</td>
+            <td><span class="badge bg-info">${esc(h.group_name)}</span></td>
+            <td>${esc(h.description)}</td>
+            <td>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-primary" onclick="editHost(${h.id})" title="Modifier">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                    <button class="btn btn-outline-danger" onclick="deleteHost(${h.id})" title="Supprimer">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>`
+        )
+        .join("");
+}
+
+function filterHosts() {
+    const q = document.getElementById("hosts-search").value.toLowerCase().trim();
+    if (!q) {
+        renderHosts(allHosts);
+        return;
+    }
+    const filtered = allHosts.filter((h) =>
+        (h.hostname || "").toLowerCase().includes(q) ||
+        (h.ip_address || "").toLowerCase().includes(q) ||
+        (h.group_name || "").toLowerCase().includes(q) ||
+        (h.username || "").toLowerCase().includes(q) ||
+        (h.description || "").toLowerCase().includes(q)
+    );
+    renderHosts(filtered);
 }
 
 function showHostModal(host = null) {
@@ -355,6 +377,23 @@ function viewOutput(executionId) {
         document.getElementById("execution-output").textContent = e.output || "(en attente...)";
         new bootstrap.Modal(document.getElementById("outputModal")).show();
     });
+}
+
+function purgeExecutions(mode) {
+    const labels = {
+        completed: "toutes les exécutions terminées",
+        "7days": "les exécutions de plus de 7 jours",
+        "30days": "les exécutions de plus de 30 jours",
+        all: "TOUTES les exécutions",
+    };
+    if (!confirm(`Supprimer ${labels[mode] || mode} ?`)) return;
+
+    api("POST", "/api/executions/purge", { mode })
+        .then((r) => {
+            showToast(r.message);
+            loadExecutions();
+        })
+        .catch((e) => showToast(e.message, "danger"));
 }
 
 // ──────────────────────────────────────────────

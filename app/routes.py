@@ -255,6 +255,32 @@ def get_execution(execution_id):
     return jsonify(execution.to_dict())
 
 
+@api_bp.route("/executions/purge", methods=["POST"])
+@login_required
+def purge_executions():
+    import datetime
+    data = request.get_json()
+    mode = data.get("mode", "completed") if data else "completed"
+
+    query = Execution.query
+    if mode == "completed":
+        query = query.filter(Execution.status.in_(["success", "failed"]))
+    elif mode == "7days":
+        cutoff = datetime.datetime.utcnow() - datetime.timedelta(days=7)
+        query = query.filter(Execution.created_at < cutoff)
+    elif mode == "30days":
+        cutoff = datetime.datetime.utcnow() - datetime.timedelta(days=30)
+        query = query.filter(Execution.created_at < cutoff)
+    elif mode == "all":
+        pass  # no filter — delete everything
+    else:
+        return jsonify({"error": "Mode invalide"}), 400
+
+    count = query.delete(synchronize_session=False)
+    db.session.commit()
+    return jsonify({"message": f"{count} exécution(s) supprimée(s)."})
+
+
 # ──────────────────────────────────────────────
 # Schedules API
 # ──────────────────────────────────────────────

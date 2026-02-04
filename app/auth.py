@@ -1,9 +1,85 @@
 import functools
+import hashlib
+import secrets
 from flask import session, redirect, url_for, request, jsonify
 from ldap3 import Server, Connection, ALL, SUBTREE
 from app.models import Setting
 
 
+# ──────────────────────────────────────────────
+# Local admin account
+# ──────────────────────────────────────────────
+DEFAULT_ADMIN_USER = "admin"
+DEFAULT_ADMIN_PASSWORD = "admin"
+
+
+def _hash_password(password, salt=None):
+    """Hash a password with SHA-256 + salt."""
+    if salt is None:
+        salt = secrets.token_hex(16)
+    hashed = hashlib.sha256((salt + password).encode()).hexdigest()
+    return f"{salt}${hashed}"
+
+
+def _verify_password(password, stored):
+    """Verify a password against a stored salt$hash."""
+    if "$" not in stored:
+        return False
+    salt, _ = stored.split("$", 1)
+    return _hash_password(password, salt) == stored
+
+
+def authenticate_local(username, password):
+    """Authenticate against the local admin account.
+
+    Returns (success: bool, display_name: str, error: str).
+    """
+    admin_user = Setting.get("admin_username", DEFAULT_ADMIN_USER)
+    admin_hash = Setting.get("admin_password_hash", "")
+
+    if username != admin_user:
+        return False, "", ""  # Empty error = not a local user, try LDAP
+
+    if not admin_hash:
+        # First run: accept default password
+        if password == DEFAULT_ADMIN_PASSWORD:
+            # Store the hash so the default is only valid once if changed
+            Setting.set("admin_password_hash", _hash_password(DEFAULT_ADMIN_PASSWORD), "admin")
+            Setting.set("admin_username", DEFAULT_ADMIN_USER, "admin")
+            return True, "Administrateur", ""
+        return False, "", "Mot de passe incorrect."
+
+    if _verify_password(password, admin_hash):
+        return True, "Administrateur", ""
+
+    return False, "", "Mot de passe incorrect."
+
+
+def change_admin_password(current_password, new_password):
+    """Change the local admin password.
+
+    Returns (success: bool, error: str).
+    """
+    admin_hash = Setting.get("admin_password_hash", "")
+
+    if not admin_hash:
+        # First setup — accept default
+        if current_password != DEFAULT_ADMIN_PASSWORD:
+            return False, "Mot de passe actuel incorrect."
+    else:
+        if not _verify_password(current_password, admin_hash):
+            return False, "Mot de passe actuel incorrect."
+
+    if len(new_password) < 6:
+        return False, "Le nouveau mot de passe doit faire au moins 6 caractères."
+
+    Setting.set("admin_password_hash", _hash_password(new_password), "admin")
+    return True, ""
+
+
+# ──────────────────────────────────────────────
+# LDAP / Active Directory
+# ──────────────────────────────────────────────
 def get_ldap_settings():
     """Read LDAP/AD settings from the database."""
     return {
@@ -27,7 +103,7 @@ def authenticate_ldap(username, password):
     cfg = get_ldap_settings()
 
     if not cfg["server"]:
-        return False, "", "Serveur LDAP non configuré. Allez dans Paramètres."
+        return False, "", "Serveur LDAP non configuré."
 
     if not username or not password:
         return False, "", "Identifiants requis."
@@ -35,17 +111,14 @@ def authenticate_ldap(username, password):
     try:
         server = Server(cfg["server"], port=cfg["port"], use_ssl=cfg["use_ssl"], get_info=ALL)
 
-        # Bind with service account to search for the user
         bind_dn = cfg["bind_dn"]
         bind_password = cfg["bind_password"]
 
         if bind_dn:
             conn = Connection(server, user=bind_dn, password=bind_password, auto_bind=True)
         else:
-            # Try direct bind with UPN (user@domain) or DN
             conn = Connection(server, user=username, password=password, auto_bind=True)
 
-        # Search for the user entry
         search_base = cfg["search_base"]
         user_filter = cfg["user_filter"].replace("{username}", username)
 
@@ -63,7 +136,6 @@ def authenticate_ldap(username, password):
         user_entry = conn.entries[0]
         user_dn = str(user_entry.entry_dn)
 
-        # If we used a service account, re-bind as the user to validate password
         if bind_dn:
             user_conn = Connection(server, user=user_dn, password=password)
             if not user_conn.bind():
@@ -71,7 +143,6 @@ def authenticate_ldap(username, password):
                 return False, "", "Mot de passe incorrect."
             user_conn.unbind()
 
-        # Check group membership if required
         require_group = cfg["require_group"]
         if require_group:
             group_attr = cfg["group_attribute"]
@@ -96,6 +167,36 @@ def authenticate_ldap(username, password):
         return False, "", f"Erreur LDAP : {str(e)}"
 
 
+# ──────────────────────────────────────────────
+# Combined authentication (local first, then LDAP)
+# ──────────────────────────────────────────────
+def authenticate(username, password):
+    """Try local admin auth first, then LDAP.
+
+    Returns (success: bool, display_name: str, error: str).
+    """
+    if not username or not password:
+        return False, "", "Identifiants requis."
+
+    # Try local admin
+    success, display_name, error = authenticate_local(username, password)
+    if success:
+        return True, display_name, ""
+    if error:
+        # Username matched admin but password was wrong
+        return False, "", error
+
+    # Try LDAP (only if server is configured)
+    ldap_cfg = get_ldap_settings()
+    if ldap_cfg["server"]:
+        return authenticate_ldap(username, password)
+
+    return False, "", "LDAP non configuré. Connectez-vous avec le compte admin local."
+
+
+# ──────────────────────────────────────────────
+# Route protection
+# ──────────────────────────────────────────────
 def login_required(f):
     """Decorator to require authentication on routes."""
     @functools.wraps(f)

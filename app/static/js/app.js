@@ -558,6 +558,42 @@ function testSmtp() {
 }
 
 // ──────────────────────────────────────────────
+// ADMIN PASSWORD
+// ──────────────────────────────────────────────
+function changeAdminPassword() {
+    const resultEl = document.getElementById("admin-password-result");
+    const current = document.getElementById("admin-current-password").value;
+    const newPw = document.getElementById("admin-new-password").value;
+    const confirm = document.getElementById("admin-confirm-password").value;
+
+    if (!current || !newPw || !confirm) {
+        resultEl.innerHTML = '<span class="text-danger">Tous les champs sont requis.</span>';
+        return;
+    }
+    if (newPw !== confirm) {
+        resultEl.innerHTML = '<span class="text-danger">Les mots de passe ne correspondent pas.</span>';
+        return;
+    }
+
+    resultEl.innerHTML = "";
+
+    api("POST", "/api/auth/change-password", {
+        current_password: current,
+        new_password: newPw,
+        confirm_password: confirm,
+    })
+        .then((r) => {
+            resultEl.innerHTML = `<span class="text-success"><i class="bi bi-check-circle"></i> ${esc(r.message)}</span>`;
+            document.getElementById("admin-current-password").value = "";
+            document.getElementById("admin-new-password").value = "";
+            document.getElementById("admin-confirm-password").value = "";
+        })
+        .catch((e) => {
+            resultEl.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle"></i> ${esc(e.message)}</span>`;
+        });
+}
+
+// ──────────────────────────────────────────────
 // Utils
 // ──────────────────────────────────────────────
 function esc(str) {

@@ -6,7 +6,7 @@ from app.models import Host, Playbook, Execution, Schedule, Setting
 from app.runner import run_playbook
 from app.notifications import send_execution_report
 from app.scheduler import add_schedule_job, remove_schedule_job
-from app.auth import login_required, authenticate_ldap
+from app.auth import login_required, authenticate, change_admin_password
 
 main_bp = Blueprint("main", __name__)
 api_bp = Blueprint("api", __name__)
@@ -25,7 +25,7 @@ def login():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
 
-        success, display_name, err = authenticate_ldap(username, password)
+        success, display_name, err = authenticate(username, password)
         if success:
             session["authenticated"] = True
             session["username"] = username
@@ -482,3 +482,26 @@ def auth_me():
         "username": session.get("username", ""),
         "display_name": session.get("display_name", ""),
     })
+
+
+@api_bp.route("/auth/change-password", methods=["POST"])
+@login_required
+def api_change_password():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "No data provided"}), 400
+
+    current = data.get("current_password", "")
+    new = data.get("new_password", "")
+    confirm = data.get("confirm_password", "")
+
+    if not current or not new:
+        return jsonify({"error": "Tous les champs sont requis."}), 400
+    if new != confirm:
+        return jsonify({"error": "Les mots de passe ne correspondent pas."}), 400
+
+    success, err = change_admin_password(current, new)
+    if not success:
+        return jsonify({"error": err}), 400
+
+    return jsonify({"message": "Mot de passe modifié avec succès."})

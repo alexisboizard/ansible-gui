@@ -199,6 +199,39 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Admin password -->
+            <div class="col-lg-6 mb-4">
+                <div class="card">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0"><i class="bi bi-person-lock"></i> Compte admin local</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-3">
+                            Identifiant par défaut : <code>admin</code> / <code>admin</code><br>
+                            Changez le mot de passe dès la première connexion.
+                        </p>
+                        <div class="mb-3">
+                            <label class="form-label">Mot de passe actuel</label>
+                            <input type="password" class="form-control" id="admin-current-password">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Nouveau mot de passe</label>
+                            <input type="password" class="form-control" id="admin-new-password" placeholder="6 caractères minimum">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Confirmer le nouveau mot de passe</label>
+                            <input type="password" class="form-control" id="admin-confirm-password">
+                        </div>
+                    </div>
+                    <div class="card-footer d-flex gap-2">
+                        <button class="btn btn-warning" onclick="changeAdminPassword()">
+                            <i class="bi bi-key"></i> Changer le mot de passe
+                        </button>
+                        <span id="admin-password-result" class="align-self-center ms-2"></span>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>

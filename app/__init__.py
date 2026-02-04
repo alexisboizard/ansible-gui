@@ -32,9 +32,32 @@ def create_app():
 
     with app.app_context():
         db.create_all()
+        _migrate(db)
 
     from app.scheduler import init_scheduler
 
     init_scheduler(app)
 
     return app
+
+
+def _migrate(db):
+    """Add missing columns to existing tables (lightweight schema migration)."""
+    import sqlalchemy
+
+    conn = db.engine.connect()
+    migrations = [
+        ("host", "reachable", "BOOLEAN"),
+        ("host", "last_ping", "DATETIME"),
+        ("host", "ping_latency", "FLOAT"),
+    ]
+    for table, column, col_type in migrations:
+        try:
+            conn.execute(sqlalchemy.text(
+                f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"
+            ))
+            conn.commit()
+        except Exception:
+            # Column already exists — ignore
+            conn.rollback()
+    conn.close()

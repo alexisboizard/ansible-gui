@@ -227,21 +227,23 @@ def create_execution():
     db.session.add(execution)
     db.session.commit()
 
-    # Run in background thread
+    # Capture values before spawning thread (avoid accessing ORM outside context)
     app = current_app._get_current_object()
+    execution_id = execution.id
     notify = data.get("notify", False)
+    result = execution.to_dict()
 
     def _run():
-        run_playbook(app, execution.id)
+        run_playbook(app, execution_id)
         if notify:
             with app.app_context():
-                ex = db.session.get(Execution, execution.id)
+                ex = db.session.get(Execution, execution_id)
                 send_execution_report(app, ex)
 
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
 
-    return jsonify(execution.to_dict()), 202
+    return jsonify(result), 202
 
 
 @api_bp.route("/executions/<int:execution_id>", methods=["GET"])

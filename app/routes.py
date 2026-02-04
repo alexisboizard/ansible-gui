@@ -5,7 +5,7 @@ from app import db
 from app.models import Host, Playbook, Execution, Schedule, Setting
 from app.runner import run_playbook
 from app.notifications import send_execution_report
-from app.scheduler import add_schedule_job, remove_schedule_job, setup_ping_job
+from app.scheduler import add_schedule_job, remove_schedule_job, setup_ping_job, get_next_run_time
 from app.ping import ping_all_hosts
 from app.auth import login_required, authenticate, change_admin_password
 
@@ -303,7 +303,12 @@ def purge_executions():
 @login_required
 def list_schedules():
     schedules = Schedule.query.order_by(Schedule.created_at.desc()).all()
-    return jsonify([s.to_dict() for s in schedules])
+    result = []
+    for s in schedules:
+        d = s.to_dict()
+        d["next_run_at"] = get_next_run_time(s.id)
+        result.append(d)
+    return jsonify(result)
 
 
 @api_bp.route("/schedules", methods=["POST"])

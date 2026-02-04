@@ -50,6 +50,8 @@ def _migrate(db):
         ("host", "reachable", "BOOLEAN"),
         ("host", "last_ping", "DATETIME"),
         ("host", "ping_latency", "FLOAT"),
+        ("schedule", "last_run_at", "DATETIME"),
+        ("schedule", "last_run_status", "VARCHAR(32)"),
     ]
     for table, column, col_type in migrations:
         try:

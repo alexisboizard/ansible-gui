@@ -16,6 +16,8 @@ DEFAULT_PING_INTERVAL = 120  # seconds
 
 def execute_scheduled_playbook(app, schedule_id):
     """Execute a playbook from a schedule and send notification."""
+    import datetime
+
     with app.app_context():
         schedule = db.session.get(Schedule, schedule_id)
         if not schedule or not schedule.enabled:
@@ -31,9 +33,15 @@ def execute_scheduled_playbook(app, schedule_id):
 
         run_playbook(app, execution.id)
 
-        # Reload execution after run
+        # Reload execution after run and update schedule last run info
         execution = db.session.get(Execution, execution.id)
-        if schedule.notify_email:
+        schedule = db.session.get(Schedule, schedule_id)
+        if schedule:
+            schedule.last_run_at = datetime.datetime.utcnow()
+            schedule.last_run_status = execution.status if execution else "failed"
+            db.session.commit()
+
+        if schedule and schedule.notify_email and execution:
             send_schedule_report(app, execution, schedule.notify_email)
 
 
@@ -89,6 +97,15 @@ def remove_schedule_job(schedule_id):
     existing = scheduler.get_job(job_id)
     if existing:
         existing.remove()
+
+
+def get_next_run_time(schedule_id):
+    """Get the next scheduled run time for a given schedule."""
+    job_id = f"schedule_{schedule_id}"
+    job = scheduler.get_job(job_id)
+    if job and job.next_run_time:
+        return job.next_run_time.isoformat()
+    return None
 
 
 def setup_ping_job(app):

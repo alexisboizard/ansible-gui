@@ -123,6 +123,8 @@ class Schedule(db.Model):
     enabled = db.Column(db.Boolean, default=True)
     notify_email = db.Column(db.String(255), default="")
     description = db.Column(db.Text, default="")
+    last_run_at = db.Column(db.DateTime, nullable=True)
+    last_run_status = db.Column(db.String(32), nullable=True)  # success, failed
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
     def to_dict(self):
@@ -135,5 +137,7 @@ class Schedule(db.Model):
             "enabled": self.enabled,
             "notify_email": self.notify_email,
             "description": self.description,
+            "last_run_at": self.last_run_at.isoformat() if self.last_run_at else None,
+            "last_run_status": self.last_run_status,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

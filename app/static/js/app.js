@@ -423,6 +423,13 @@ function purgeExecutions(mode) {
 // ──────────────────────────────────────────────
 // SCHEDULES
 // ──────────────────────────────────────────────
+function scheduleLastRunBadge(s) {
+    if (!s.last_run_at) return '<span class="text-muted">-</span>';
+    const statusMap = { success: "success", failed: "danger" };
+    const cls = statusMap[s.last_run_status] || "secondary";
+    return `<span class="badge bg-${cls}">${s.last_run_status}</span> <small class="text-muted">${formatDate(s.last_run_at)}</small>`;
+}
+
 function loadSchedules() {
     api("GET", "/api/schedules").then((schedules) => {
         const tbody = document.getElementById("schedules-table");
@@ -433,6 +440,8 @@ function loadSchedules() {
                 <td>${esc(s.playbook_name || "?")}</td>
                 <td><code>${esc(s.cron_expression)}</code></td>
                 <td>${esc(s.hosts_pattern)}</td>
+                <td>${scheduleLastRunBadge(s)}</td>
+                <td>${s.next_run_at ? formatDate(s.next_run_at) : '<span class="text-muted">-</span>'}</td>
                 <td>${esc(s.notify_email) || "-"}</td>
                 <td>
                     <div class="form-check form-switch">

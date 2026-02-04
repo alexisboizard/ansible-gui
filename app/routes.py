@@ -270,6 +270,24 @@ def get_execution(execution_id):
     return jsonify(execution.to_dict())
 
 
+@api_bp.route("/executions/<int:execution_id>/cancel", methods=["POST"])
+@login_required
+def cancel_execution(execution_id):
+    """Force-cancel a stuck execution."""
+    import datetime
+    execution = db.session.get(Execution, execution_id)
+    if not execution:
+        return jsonify({"error": "Execution not found"}), 404
+    if execution.status not in ("pending", "running"):
+        return jsonify({"error": "Cette exécution est déjà terminée."}), 400
+
+    execution.status = "failed"
+    execution.output = (execution.output or "") + "\n--- Exécution annulée manuellement ---"
+    execution.finished_at = datetime.datetime.utcnow()
+    db.session.commit()
+    return jsonify({"message": "Exécution annulée."})
+
+
 @api_bp.route("/executions/purge", methods=["POST"])
 @login_required
 def purge_executions():

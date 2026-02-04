@@ -386,9 +386,12 @@ function loadExecutions() {
                 <td>${formatDate(e.started_at)}</td>
                 <td>${formatDate(e.finished_at)}</td>
                 <td>
-                    <button class="btn btn-sm btn-outline-secondary" onclick="viewOutput(${e.id})">
-                        <i class="bi bi-terminal"></i> Sortie
-                    </button>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-secondary" onclick="viewOutput(${e.id})">
+                            <i class="bi bi-terminal"></i> Sortie
+                        </button>
+                        ${e.status === "running" || e.status === "pending" ? `<button class="btn btn-outline-danger" onclick="cancelExecution(${e.id})" title="Annuler"><i class="bi bi-x-circle"></i></button>` : ""}
+                    </div>
                 </td>
             </tr>`
             )
@@ -413,6 +416,16 @@ function purgeExecutions(mode) {
     if (!confirm(`Supprimer ${labels[mode] || mode} ?`)) return;
 
     api("POST", "/api/executions/purge", { mode })
+        .then((r) => {
+            showToast(r.message);
+            loadExecutions();
+        })
+        .catch((e) => showToast(e.message, "danger"));
+}
+
+function cancelExecution(id) {
+    if (!confirm("Annuler cette exécution ?")) return;
+    api("POST", `/api/executions/${id}/cancel`)
         .then((r) => {
             showToast(r.message);
             loadExecutions();

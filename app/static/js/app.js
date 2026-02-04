@@ -77,6 +77,19 @@ function loadHosts() {
     });
 }
 
+function hostStatusDot(host) {
+    if (host.reachable === null || host.reachable === undefined) {
+        return '<span class="host-status-dot status-unknown" title="Inconnu"></span>';
+    }
+    if (host.reachable) {
+        const latency = host.ping_latency != null ? ` (${host.ping_latency.toFixed(1)} ms)` : "";
+        const lastPing = host.last_ping ? `\nDernier ping : ${formatDate(host.last_ping)}` : "";
+        return `<span class="host-status-dot status-up" title="Joignable${latency}${lastPing}"></span>`;
+    }
+    const lastPing = host.last_ping ? `\nDernier ping : ${formatDate(host.last_ping)}` : "";
+    return `<span class="host-status-dot status-down" title="Injoignable${lastPing}"></span>`;
+}
+
 function renderHosts(hosts) {
     const tbody = document.getElementById("hosts-table");
     const empty = document.getElementById("hosts-empty");
@@ -90,6 +103,7 @@ function renderHosts(hosts) {
         .map(
             (h) => `
         <tr>
+            <td class="text-center">${hostStatusDot(h)}</td>
             <td><strong>${esc(h.hostname)}</strong></td>
             <td><code>${esc(h.ip_address)}</code></td>
             <td>${h.port}</td>
@@ -109,6 +123,16 @@ function renderHosts(hosts) {
         </tr>`
         )
         .join("");
+}
+
+function triggerPing() {
+    api("POST", "/api/hosts/ping")
+        .then((r) => {
+            showToast(r.message);
+            // Reload hosts after a delay to let ping finish
+            setTimeout(loadHosts, 5000);
+        })
+        .catch((e) => showToast(e.message, "danger"));
 }
 
 function filterHosts() {

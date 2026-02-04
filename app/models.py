@@ -11,6 +11,9 @@ class Host(db.Model):
     group_name = db.Column(db.String(128), default="all")
     variables = db.Column(db.Text, default="{}")
     description = db.Column(db.Text, default="")
+    reachable = db.Column(db.Boolean, default=None, nullable=True)  # None=unknown, True/False
+    last_ping = db.Column(db.DateTime, nullable=True)
+    ping_latency = db.Column(db.Float, nullable=True)  # ms
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     updated_at = db.Column(
         db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
@@ -26,6 +29,9 @@ class Host(db.Model):
             "group_name": self.group_name,
             "variables": self.variables,
             "description": self.description,
+            "reachable": self.reachable,
+            "last_ping": self.last_ping.isoformat() if self.last_ping else None,
+            "ping_latency": self.ping_latency,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

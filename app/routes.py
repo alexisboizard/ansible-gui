@@ -5,7 +5,8 @@ from app import db
 from app.models import Host, Playbook, Execution, Schedule, Setting
 from app.runner import run_playbook
 from app.notifications import send_execution_report
-from app.scheduler import add_schedule_job, remove_schedule_job
+from app.scheduler import add_schedule_job, remove_schedule_job, setup_ping_job
+from app.ping import ping_all_hosts
 from app.auth import login_required, authenticate, change_admin_password
 
 main_bp = Blueprint("main", __name__)
@@ -129,6 +130,20 @@ def delete_host(host_id):
 def list_groups():
     groups = db.session.query(Host.group_name).distinct().all()
     return jsonify([g[0] for g in groups])
+
+
+@api_bp.route("/hosts/ping", methods=["POST"])
+@login_required
+def trigger_ping():
+    """Trigger an immediate ping check of all hosts."""
+    app = current_app._get_current_object()
+
+    def _run():
+        ping_all_hosts(app)
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+    return jsonify({"message": "Vérification de la connectivité lancée."})
 
 
 # ──────────────────────────────────────────────
@@ -389,6 +404,8 @@ SETTINGS_SCHEMA = {
     "general": [
         {"key": "app_name", "label": "Nom de l'application", "placeholder": "Ansible GUI", "type": "text"},
         {"key": "ansible_timeout", "label": "Timeout exécution (secondes)", "placeholder": "3600", "type": "number"},
+        {"key": "ping_interval", "label": "Intervalle ping hôtes (secondes)", "placeholder": "120", "type": "number"},
+        {"key": "ping_timeout", "label": "Timeout ping (secondes)", "placeholder": "2", "type": "number"},
     ],
 }
 
@@ -435,6 +452,11 @@ def update_settings():
         if key in SENSITIVE_KEYS and value == "********":
             continue
         Setting.set(key, str(value), category=all_keys[key])
+
+    # Re-register ping job if interval changed
+    if "ping_interval" in data:
+        app = current_app._get_current_object()
+        setup_ping_job(app)
 
     return jsonify({"message": "Paramètres enregistrés"})
 

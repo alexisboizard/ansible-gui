@@ -1,12 +1,17 @@
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 
 from app import db
-from app.models import Schedule, Execution
+from app.models import Schedule, Execution, Setting
 from app.runner import run_playbook
 from app.notifications import send_schedule_report
+from app.ping import ping_all_hosts
 
 scheduler = BackgroundScheduler()
+
+PING_JOB_ID = "host_ping_checker"
+DEFAULT_PING_INTERVAL = 120  # seconds
 
 
 def execute_scheduled_playbook(app, schedule_id):
@@ -86,8 +91,27 @@ def remove_schedule_job(schedule_id):
         existing.remove()
 
 
+def setup_ping_job(app):
+    """Register or update the periodic host ping job."""
+    with app.app_context():
+        interval = int(Setting.get("ping_interval", str(DEFAULT_PING_INTERVAL)) or DEFAULT_PING_INTERVAL)
+
+    existing = scheduler.get_job(PING_JOB_ID)
+    if existing:
+        existing.remove()
+
+    scheduler.add_job(
+        ping_all_hosts,
+        trigger=IntervalTrigger(seconds=interval),
+        id=PING_JOB_ID,
+        args=[app],
+        replace_existing=True,
+    )
+
+
 def init_scheduler(app):
     """Initialize and start the APScheduler."""
     if not scheduler.running:
         scheduler.start()
     load_schedules(app)
+    setup_ping_job(app)

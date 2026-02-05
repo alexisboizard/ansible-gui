@@ -108,7 +108,7 @@ function renderHosts(hosts) {
             <td><code>${esc(h.ip_address)}</code></td>
             <td>${h.port}</td>
             <td>${esc(h.username)}</td>
-            <td><span class="badge bg-info">${esc(h.group_name)}</span></td>
+            <td>${(h.group_name || "all").split(",").map(g => `<span class="badge bg-info me-1">${esc(g.trim())}</span>`).join("")}</td>
             <td>${esc(h.description)}</td>
             <td>
                 <div class="btn-group btn-group-sm">

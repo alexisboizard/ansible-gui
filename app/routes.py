@@ -128,8 +128,15 @@ def delete_host(host_id):
 @api_bp.route("/hosts/groups", methods=["GET"])
 @login_required
 def list_groups():
-    groups = db.session.query(Host.group_name).distinct().all()
-    return jsonify([g[0] for g in groups])
+    rows = db.session.query(Host.group_name).distinct().all()
+    groups = set()
+    for row in rows:
+        if row[0]:
+            for g in row[0].split(","):
+                g = g.strip()
+                if g:
+                    groups.add(g)
+    return jsonify(sorted(groups))
 
 
 @api_bp.route("/hosts/ping", methods=["POST"])

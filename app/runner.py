@@ -16,7 +16,11 @@ def generate_inventory(app, hosts_pattern="all"):
             hosts = Host.query.all()
         else:
             patterns = [p.strip() for p in hosts_pattern.split(",")]
-            hosts = Host.query.filter(Host.group_name.in_(patterns)).all()
+            # Search hosts whose group_name contains any of the patterns
+            conditions = []
+            for p in patterns:
+                conditions.append(Host.group_name.contains(p))
+            hosts = Host.query.filter(db.or_(*conditions)).all()
             if not hosts:
                 hosts = Host.query.filter(Host.hostname.in_(patterns)).all()
 
@@ -36,11 +40,12 @@ def generate_inventory(app, hosts_pattern="all"):
 
             inventory["all"]["hosts"][host.hostname] = host_vars
 
-            group = host.group_name or "all"
-            if group != "all":
-                if group not in inventory["all"]["children"]:
-                    inventory["all"]["children"][group] = {"hosts": {}}
-                inventory["all"]["children"][group]["hosts"][host.hostname] = None
+            groups = [g.strip() for g in (host.group_name or "all").split(",") if g.strip()]
+            for group in groups:
+                if group != "all":
+                    if group not in inventory["all"]["children"]:
+                        inventory["all"]["children"][group] = {"hosts": {}}
+                    inventory["all"]["children"][group]["hosts"][host.hostname] = None
 
         return inventory
 

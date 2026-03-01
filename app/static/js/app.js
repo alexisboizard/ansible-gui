@@ -59,13 +59,65 @@ document.querySelectorAll("[data-tab]").forEach((link) => {
         document.getElementById("tab-" + link.dataset.tab).classList.remove("d-none");
 
         const tab = link.dataset.tab;
-        if (tab === "inventory") loadHosts();
+        if (tab === "dashboard") loadDashboard();
+        else if (tab === "inventory") loadHosts();
         else if (tab === "playbooks") loadPlaybooks();
         else if (tab === "executions") loadExecutions();
         else if (tab === "schedules") loadSchedules();
         else if (tab === "settings") loadSettings();
     });
 });
+
+// ──────────────────────────────────────────────
+// DASHBOARD
+// ──────────────────────────────────────────────
+function loadDashboard() {
+    // Load stats
+    api("GET", "/api/hosts").then((hosts) => {
+        document.getElementById("stat-hosts").textContent = hosts.length;
+        const up = hosts.filter(h => h.reachable === true).length;
+        const down = hosts.filter(h => h.reachable === false).length;
+        document.getElementById("stat-hosts-up").textContent = up;
+        document.getElementById("stat-hosts-down").textContent = down;
+    });
+
+    api("GET", "/api/playbooks").then((playbooks) => {
+        document.getElementById("stat-playbooks").textContent = playbooks.length;
+    });
+
+    // Recent executions
+    api("GET", "/api/executions").then((executions) => {
+        const tbody = document.getElementById("dashboard-recent-executions");
+        const recent = executions.slice(0, 5);
+        if (recent.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Aucune execution</td></tr>';
+            return;
+        }
+        tbody.innerHTML = recent.map(e => `
+            <tr>
+                <td>${esc(e.playbook_name || "?")}</td>
+                <td>${statusBadge(e.status)}</td>
+                <td><small class="text-muted">${formatDate(e.started_at)}</small></td>
+            </tr>
+        `).join("");
+    });
+
+    // Upcoming schedules
+    api("GET", "/api/schedules").then((schedules) => {
+        const tbody = document.getElementById("dashboard-upcoming-schedules");
+        const upcoming = schedules.filter(s => s.enabled && s.next_run_at).slice(0, 5);
+        if (upcoming.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted">Aucune planification</td></tr>';
+            return;
+        }
+        tbody.innerHTML = upcoming.map(s => `
+            <tr>
+                <td>${esc(s.playbook_name || "?")}</td>
+                <td><small class="text-muted">${formatDate(s.next_run_at)}</small></td>
+            </tr>
+        `).join("");
+    });
+}
 
 // ──────────────────────────────────────────────
 // HOSTS
@@ -157,7 +209,7 @@ function showHostModal(host = null) {
     document.getElementById("host-hostname").value = host ? host.hostname : "";
     document.getElementById("host-ip").value = host ? host.ip_address : "";
     document.getElementById("host-port").value = host ? host.port : 22;
-    document.getElementById("host-username").value = host ? host.username : "root";
+    document.getElementById("host-username").value = host ? host.username : "ansible";
     document.getElementById("host-group").value = host ? host.group_name : "all";
     document.getElementById("host-variables").value = host ? host.variables : "{}";
     document.getElementById("host-description").value = host ? host.description : "";
@@ -174,7 +226,7 @@ function saveHost() {
         hostname: document.getElementById("host-hostname").value.trim(),
         ip_address: document.getElementById("host-ip").value.trim(),
         port: parseInt(document.getElementById("host-port").value) || 22,
-        username: document.getElementById("host-username").value.trim() || "root",
+        username: document.getElementById("host-username").value.trim() || "ansible",
         group_name: document.getElementById("host-group").value.trim() || "all",
         variables: document.getElementById("host-variables").value.trim() || "{}",
         description: document.getElementById("host-description").value.trim(),
@@ -692,5 +744,5 @@ function esc(str) {
 // Init
 // ──────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
-    loadHosts();
+    loadDashboard();
 });

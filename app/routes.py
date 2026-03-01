@@ -75,7 +75,7 @@ def create_host():
         hostname=data["hostname"],
         ip_address=data["ip_address"],
         port=data.get("port", 22),
-        username=data.get("username", "root"),
+        username=data.get("username", "ansible"),
         group_name=data.get("group_name", "all"),
         variables=data.get("variables", "{}"),
         description=data.get("description", ""),

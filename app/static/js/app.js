@@ -187,6 +187,52 @@ function triggerPing() {
         .catch((e) => showToast(e.message, "danger"));
 }
 
+function showImportModal() {
+    document.getElementById("import-file").value = "";
+    document.getElementById("import-result").innerHTML = "";
+    new bootstrap.Modal(document.getElementById("importModal")).show();
+}
+
+function importHosts() {
+    const fileInput = document.getElementById("import-file");
+    const resultDiv = document.getElementById("import-result");
+
+    if (!fileInput.files || !fileInput.files[0]) {
+        resultDiv.innerHTML = '<div class="alert alert-warning">Selectionnez un fichier CSV</div>';
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", fileInput.files[0]);
+
+    resultDiv.innerHTML = '<div class="text-muted"><i class="bi bi-hourglass-split"></i> Import en cours...</div>';
+
+    fetch("/api/hosts/import", {
+        method: "POST",
+        body: formData,
+    })
+        .then(async (r) => {
+            const json = await r.json();
+            if (!r.ok) throw new Error(json.error || "Erreur serveur");
+            return json;
+        })
+        .then((r) => {
+            let html = `<div class="alert alert-success"><i class="bi bi-check-circle"></i> ${esc(r.message)}</div>`;
+            if (r.errors && r.errors.length > 0) {
+                html += '<div class="alert alert-warning mt-2"><strong>Avertissements :</strong><ul class="mb-0 mt-2">';
+                r.errors.forEach((e) => {
+                    html += `<li>${esc(e)}</li>`;
+                });
+                html += "</ul></div>";
+            }
+            resultDiv.innerHTML = html;
+            loadHosts();
+        })
+        .catch((e) => {
+            resultDiv.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle"></i> ${esc(e.message)}</div>`;
+        });
+}
+
 function filterHosts() {
     const q = document.getElementById("hosts-search").value.toLowerCase().trim();
     if (!q) {

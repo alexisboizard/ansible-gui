@@ -153,6 +153,119 @@ def trigger_ping():
     return jsonify({"message": "Vérification de la connectivité lancée."})
 
 
+@api_bp.route("/hosts/import", methods=["POST"])
+@login_required
+def import_hosts_csv():
+    """Import hosts from a CSV file.
+
+    Expected CSV format (with header):
+    hostname,ip_address,port,username,group_name,description,variables
+
+    Only hostname and ip_address are required.
+    """
+    import csv
+    import io
+
+    if "file" not in request.files:
+        return jsonify({"error": "Aucun fichier fourni"}), 400
+
+    file = request.files["file"]
+    if not file.filename or not file.filename.endswith(".csv"):
+        return jsonify({"error": "Le fichier doit être un CSV"}), 400
+
+    try:
+        content = file.read().decode("utf-8")
+        reader = csv.DictReader(io.StringIO(content))
+
+        imported = 0
+        skipped = 0
+        errors = []
+
+        for i, row in enumerate(reader, start=2):  # start=2 because row 1 is header
+            hostname = row.get("hostname", "").strip()
+            ip_address = row.get("ip_address", "").strip()
+
+            if not hostname or not ip_address:
+                errors.append(f"Ligne {i}: hostname ou ip_address manquant")
+                skipped += 1
+                continue
+
+            # Check if host already exists
+            existing = Host.query.filter(
+                (Host.hostname == hostname) | (Host.ip_address == ip_address)
+            ).first()
+            if existing:
+                errors.append(f"Ligne {i}: {hostname} ou {ip_address} existe déjà")
+                skipped += 1
+                continue
+
+            try:
+                port = int(row.get("port", "22").strip() or 22)
+            except ValueError:
+                port = 22
+
+            host = Host(
+                hostname=hostname,
+                ip_address=ip_address,
+                port=port,
+                username=row.get("username", "").strip() or "ansible",
+                group_name=row.get("group_name", "").strip() or "all",
+                description=row.get("description", "").strip(),
+                variables=row.get("variables", "").strip() or "{}",
+            )
+            db.session.add(host)
+            imported += 1
+
+        db.session.commit()
+
+        message = f"{imported} hôte(s) importé(s)"
+        if skipped:
+            message += f", {skipped} ignoré(s)"
+
+        return jsonify({
+            "message": message,
+            "imported": imported,
+            "skipped": skipped,
+            "errors": errors[:10],  # Limit error messages
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": f"Erreur lors de l'import: {str(e)}"}), 400
+
+
+@api_bp.route("/hosts/export", methods=["GET"])
+@login_required
+def export_hosts_csv():
+    """Export all hosts to a CSV file."""
+    import csv
+    import io
+
+    hosts = Host.query.order_by(Host.group_name, Host.hostname).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["hostname", "ip_address", "port", "username", "group_name", "description", "variables"])
+
+    for h in hosts:
+        writer.writerow([
+            h.hostname,
+            h.ip_address,
+            h.port,
+            h.username,
+            h.group_name,
+            h.description,
+            h.variables,
+        ])
+
+    from flask import Response
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment;filename=hosts_export.csv"}
+    )
+
+
 # ──────────────────────────────────────────────
 # Playbooks API
 # ──────────────────────────────────────────────

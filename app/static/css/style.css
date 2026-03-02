@@ -647,3 +647,203 @@ a:hover {
         width: 150px;
     }
 }
+
+/* ──────────────────────────────────────────────
+   Bootstrap Overrides for Dark Theme
+   ────────────────────────────────────────────── */
+
+/* Alerts */
+.alert {
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.alert-success {
+    background-color: rgba(35, 134, 54, 0.2);
+    border-color: #238636;
+    color: #3fb950;
+}
+
+.alert-warning {
+    background-color: rgba(187, 128, 9, 0.2);
+    border-color: #bb8009;
+    color: #d29922;
+}
+
+.alert-danger {
+    background-color: rgba(218, 54, 51, 0.2);
+    border-color: #da3633;
+    color: #f85149;
+}
+
+.alert-info {
+    background-color: rgba(31, 111, 235, 0.2);
+    border-color: #1f6feb;
+    color: #58a6ff;
+}
+
+/* Text utilities */
+.text-muted {
+    color: var(--text-muted) !important;
+}
+
+.text-secondary {
+    color: var(--text-secondary) !important;
+}
+
+/* Form select dropdown options */
+.form-select option {
+    background-color: var(--sidebar-bg);
+    color: var(--text-primary);
+}
+
+/* Modal backdrop */
+.modal-backdrop {
+    background-color: rgba(0, 0, 0, 0.7);
+}
+
+/* List groups */
+.list-group-item {
+    background-color: var(--card-bg);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+/* Progress bars */
+.progress {
+    background-color: var(--sidebar-bg);
+    border-radius: 6px;
+}
+
+/* Pagination */
+.page-link {
+    background-color: var(--card-bg);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+.page-link:hover {
+    background-color: var(--sidebar-hover);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+.page-item.active .page-link {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+.page-item.disabled .page-link {
+    background-color: var(--sidebar-bg);
+    border-color: var(--border-color);
+    color: var(--text-muted);
+}
+
+/* Input groups */
+.input-group-text {
+    background-color: var(--sidebar-bg);
+    border-color: var(--border-color);
+    color: var(--text-secondary);
+}
+
+/* Accordion */
+.accordion-item {
+    background-color: var(--card-bg);
+    border-color: var(--border-color);
+}
+
+.accordion-button {
+    background-color: var(--card-bg);
+    color: var(--text-primary);
+}
+
+.accordion-button:not(.collapsed) {
+    background-color: var(--sidebar-hover);
+    color: var(--text-primary);
+}
+
+.accordion-button:focus {
+    box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.2);
+    border-color: #58a6ff;
+}
+
+.accordion-body {
+    background-color: var(--card-bg);
+    color: var(--text-primary);
+}
+
+/* Tabs / Nav tabs */
+.nav-tabs {
+    border-bottom-color: var(--border-color);
+}
+
+.nav-tabs .nav-link {
+    color: var(--text-secondary);
+    border-color: transparent;
+}
+
+.nav-tabs .nav-link:hover {
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+.nav-tabs .nav-link.active {
+    background-color: var(--card-bg);
+    border-color: var(--border-color) var(--border-color) var(--card-bg);
+    color: var(--text-primary);
+}
+
+/* Popovers & Tooltips */
+.popover {
+    background-color: var(--card-bg);
+    border-color: var(--border-color);
+}
+
+.popover-header {
+    background-color: var(--sidebar-bg);
+    border-bottom-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+.popover-body {
+    color: var(--text-primary);
+}
+
+.tooltip-inner {
+    background-color: var(--sidebar-bg);
+    color: var(--text-primary);
+}
+
+/* Close button */
+.btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+/* Code elements */
+code {
+    color: #f0883e;
+    background-color: rgba(240, 136, 62, 0.1);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+pre {
+    background-color: var(--sidebar-bg);
+    color: var(--text-primary);
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+/* Blockquote */
+blockquote {
+    border-left: 4px solid var(--border-color);
+    padding-left: 16px;
+    color: var(--text-secondary);
+}
+
+/* HR */
+hr {
+    border-color: var(--border-color);
+    opacity: 1;
+}

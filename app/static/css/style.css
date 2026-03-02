@@ -3,6 +3,10 @@
    ────────────────────────────────────────────── */
 :root {
     --sidebar-width: 240px;
+}
+
+/* Dark Theme (default) */
+:root, .dark-theme {
     --sidebar-bg: #1a1d21;
     --sidebar-hover: #2d3238;
     --sidebar-active: #0d6efd;
@@ -12,6 +16,51 @@
     --text-primary: #e6edf3;
     --text-secondary: #8b949e;
     --text-muted: #6e7681;
+    --link-color: #58a6ff;
+    --link-hover: #79c0ff;
+    --code-color: #f0883e;
+    --code-bg: rgba(240, 136, 62, 0.1);
+    --success-bg: rgba(35, 134, 54, 0.2);
+    --success-border: #238636;
+    --success-text: #3fb950;
+    --warning-bg: rgba(187, 128, 9, 0.2);
+    --warning-border: #bb8009;
+    --warning-text: #d29922;
+    --danger-bg: rgba(218, 54, 51, 0.2);
+    --danger-border: #da3633;
+    --danger-text: #f85149;
+    --info-bg: rgba(31, 111, 235, 0.2);
+    --info-border: #1f6feb;
+    --info-text: #58a6ff;
+}
+
+/* Light Theme */
+.light-theme {
+    --sidebar-bg: #f6f8fa;
+    --sidebar-hover: #eaeef2;
+    --sidebar-active: #0d6efd;
+    --main-bg: #ffffff;
+    --card-bg: #ffffff;
+    --border-color: #d0d7de;
+    --text-primary: #1f2328;
+    --text-secondary: #656d76;
+    --text-muted: #8c959f;
+    --link-color: #0969da;
+    --link-hover: #0550ae;
+    --code-color: #cf222e;
+    --code-bg: rgba(207, 34, 46, 0.08);
+    --success-bg: #dafbe1;
+    --success-border: #218838;
+    --success-text: #1a7f37;
+    --warning-bg: #fff8c5;
+    --warning-border: #bf8700;
+    --warning-text: #9a6700;
+    --danger-bg: #ffebe9;
+    --danger-border: #cf222e;
+    --danger-text: #cf222e;
+    --info-bg: #ddf4ff;
+    --info-border: #0969da;
+    --info-text: #0969da;
 }
 
 /* ──────────────────────────────────────────────
@@ -21,22 +70,23 @@
     box-sizing: border-box;
 }
 
-body.dark-theme {
+body {
     background-color: var(--main-bg);
     color: var(--text-primary);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
     margin: 0;
     padding: 0;
     min-height: 100vh;
+    transition: background-color 0.2s, color 0.2s;
 }
 
 a {
-    color: #58a6ff;
+    color: var(--link-color);
     text-decoration: none;
 }
 
 a:hover {
-    color: #79c0ff;
+    color: var(--link-hover);
 }
 
 /* ──────────────────────────────────────────────
@@ -649,7 +699,7 @@ a:hover {
 }
 
 /* ──────────────────────────────────────────────
-   Bootstrap Overrides for Dark Theme
+   Bootstrap Overrides (theme-aware)
    ────────────────────────────────────────────── */
 
 /* Alerts */
@@ -659,27 +709,27 @@ a:hover {
 }
 
 .alert-success {
-    background-color: rgba(35, 134, 54, 0.2);
-    border-color: #238636;
-    color: #3fb950;
+    background-color: var(--success-bg);
+    border-color: var(--success-border);
+    color: var(--success-text);
 }
 
 .alert-warning {
-    background-color: rgba(187, 128, 9, 0.2);
-    border-color: #bb8009;
-    color: #d29922;
+    background-color: var(--warning-bg);
+    border-color: var(--warning-border);
+    color: var(--warning-text);
 }
 
 .alert-danger {
-    background-color: rgba(218, 54, 51, 0.2);
-    border-color: #da3633;
-    color: #f85149;
+    background-color: var(--danger-bg);
+    border-color: var(--danger-border);
+    color: var(--danger-text);
 }
 
 .alert-info {
-    background-color: rgba(31, 111, 235, 0.2);
-    border-color: #1f6feb;
-    color: #58a6ff;
+    background-color: var(--info-bg);
+    border-color: var(--info-border);
+    color: var(--info-text);
 }
 
 /* Text utilities */
@@ -814,15 +864,15 @@ a:hover {
     color: var(--text-primary);
 }
 
-/* Close button */
-.btn-close {
+/* Close button - dark theme */
+:not(.light-theme) .btn-close {
     filter: invert(1) grayscale(100%) brightness(200%);
 }
 
 /* Code elements */
 code {
-    color: #f0883e;
-    background-color: rgba(240, 136, 62, 0.1);
+    color: var(--code-color);
+    background-color: var(--code-bg);
     padding: 2px 6px;
     border-radius: 4px;
 }
@@ -846,4 +896,73 @@ blockquote {
 hr {
     border-color: var(--border-color);
     opacity: 1;
+}
+
+/* ──────────────────────────────────────────────
+   Theme Toggle Button
+   ────────────────────────────────────────────── */
+.theme-toggle-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.theme-toggle-btn:hover {
+    background-color: var(--sidebar-hover);
+    color: var(--text-primary);
+}
+
+.theme-toggle-btn i {
+    font-size: 1.1rem;
+}
+
+/* ──────────────────────────────────────────────
+   Light Theme Specific Overrides
+   ────────────────────────────────────────────── */
+.light-theme .card {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.light-theme .stat-card {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.light-theme .modal-content {
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+}
+
+.light-theme .dropdown-menu-dark {
+    background-color: var(--card-bg);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.light-theme .btn-outline-light {
+    border-color: var(--border-color);
+    color: var(--text-secondary);
+}
+
+.light-theme .btn-outline-light:hover {
+    background-color: var(--sidebar-hover);
+    border-color: var(--border-color);
+    color: var(--text-primary);
+}
+
+.light-theme .table thead th {
+    background-color: var(--sidebar-bg);
+}
+
+.light-theme .sidebar {
+    box-shadow: 1px 0 3px rgba(0, 0, 0, 0.05);
+}
+
+.light-theme .badge.bg-info {
+    background-color: #0969da !important;
+    color: #fff;
 }

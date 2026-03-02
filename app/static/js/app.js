@@ -6,6 +6,45 @@ let settingsSchema = {};
 let settingsValues = {};
 let allHosts = [];
 
+// ──────────────────────────────────────────────
+// Theme Management
+// ──────────────────────────────────────────────
+function initTheme() {
+    const saved = localStorage.getItem("theme");
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const theme = saved || (prefersDark ? "dark" : "light");
+    applyTheme(theme);
+}
+
+function applyTheme(theme) {
+    const html = document.documentElement;
+    const body = document.body;
+    const icon = document.getElementById("theme-icon");
+
+    // Apply to both html and body for compatibility
+    html.classList.remove("dark-theme", "light-theme");
+    html.classList.add(theme + "-theme");
+    if (body) {
+        body.classList.remove("dark-theme", "light-theme");
+        body.classList.add(theme + "-theme");
+    }
+
+    if (icon) {
+        icon.className = theme === "dark" ? "bi bi-sun-fill" : "bi bi-moon-fill";
+    }
+
+    localStorage.setItem("theme", theme);
+}
+
+function toggleTheme() {
+    const html = document.documentElement;
+    const isLight = html.classList.contains("light-theme");
+    applyTheme(isLight ? "dark" : "light");
+}
+
+// Initialize theme immediately to avoid flash
+initTheme();
+
 function api(method, url, data) {
     const opts = {
         method,

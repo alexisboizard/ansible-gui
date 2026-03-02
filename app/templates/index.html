@@ -9,8 +9,17 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/theme/dracula.min.css">
     <link rel="stylesheet" href="/static/css/style.css">
+    <script>
+        // Apply theme immediately to avoid flash
+        (function() {
+            var saved = localStorage.getItem("theme");
+            var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+            var theme = saved || (prefersDark ? "dark" : "light");
+            document.documentElement.className = theme + "-theme";
+        })();
+    </script>
 </head>
-<body class="dark-theme">
+<body>
 
 <!-- SIDEBAR -->
 <aside class="sidebar">
@@ -51,9 +60,14 @@
             <i class="bi bi-person-circle"></i>
             <span>{{ user }}</span>
         </div>
-        <a href="/logout" class="logout-btn" title="Deconnexion">
-            <i class="bi bi-box-arrow-right"></i>
-        </a>
+        <div class="d-flex align-items-center gap-2">
+            <button class="theme-toggle-btn" onclick="toggleTheme()" title="Changer de theme">
+                <i class="bi bi-sun-fill" id="theme-icon"></i>
+            </button>
+            <a href="/logout" class="logout-btn" title="Deconnexion">
+                <i class="bi bi-box-arrow-right"></i>
+            </a>
+        </div>
     </div>
 </aside>
 

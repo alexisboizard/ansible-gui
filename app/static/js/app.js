@@ -679,6 +679,7 @@ function loadSettings() {
         ([schema, values]) => {
             settingsSchema = schema;
             settingsValues = values;
+            renderSettingsCategory("ssh");
             renderSettingsCategory("ldap");
             renderSettingsCategory("smtp");
             renderSettingsCategory("general");
@@ -701,6 +702,17 @@ function renderSettingsCategory(category) {
                     <input class="form-check-input" type="checkbox" id="setting-${field.key}" ${checked}
                            data-setting-key="${field.key}">
                     <label class="form-check-label" for="setting-${field.key}">${esc(field.label)}</label>
+                </div>`;
+            }
+
+            if (field.type === "textarea") {
+                return `
+                <div class="mb-3">
+                    <label class="form-label" for="setting-${field.key}">${esc(field.label)}</label>
+                    <textarea class="form-control" id="setting-${field.key}" rows="5"
+                              placeholder="${esc(field.placeholder)}"
+                              data-setting-key="${field.key}">${esc(val)}</textarea>
+                    <div class="form-text">Collez votre cle privee SSH ici</div>
                 </div>`;
             }
 

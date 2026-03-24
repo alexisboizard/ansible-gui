@@ -524,6 +524,11 @@ def delete_schedule(schedule_id):
 # Settings API
 # ──────────────────────────────────────────────
 SETTINGS_SCHEMA = {
+    "ssh": [
+        {"key": "ssh_private_key", "label": "Clé privée SSH (contenu)", "placeholder": "-----BEGIN OPENSSH PRIVATE KEY-----\\n...", "type": "textarea"},
+        {"key": "ssh_default_user", "label": "Utilisateur SSH par défaut", "placeholder": "ansible", "type": "text"},
+        {"key": "ssh_default_password", "label": "Mot de passe SSH (si pas de clé)", "placeholder": "", "type": "password"},
+    ],
     "ldap": [
         {"key": "ldap_server", "label": "Serveur LDAP / AD", "placeholder": "ldap.example.com", "type": "text"},
         {"key": "ldap_port", "label": "Port", "placeholder": "389", "type": "number"},
@@ -553,7 +558,7 @@ SETTINGS_SCHEMA = {
 }
 
 # Keys that should be masked when returned
-SENSITIVE_KEYS = {"ldap_bind_password", "smtp_password"}
+SENSITIVE_KEYS = {"ldap_bind_password", "smtp_password", "ssh_private_key", "ssh_default_password"}
 
 
 @api_bp.route("/settings/schema", methods=["GET"])

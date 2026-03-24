@@ -7,7 +7,7 @@ import subprocess
 import yaml
 
 from app import db
-from app.models import Host, Execution
+from app.models import Host, Execution, Setting
 
 
 def sanitize_group_name(name):
@@ -79,6 +79,7 @@ def run_playbook(app, execution_id):
 
         inventory_path = None
         playbook_path = None
+        ssh_key_path = None
 
         try:
             inventory = generate_inventory(app, execution.hosts_pattern)
@@ -90,20 +91,53 @@ def run_playbook(app, execution_id):
             with open(playbook_path, "w") as f:
                 f.write(playbook.content)
 
+            # Create .ssh directory in work_dir for SSH to use
+            ssh_dir = os.path.join(work_dir, ".ssh")
+            os.makedirs(ssh_dir, exist_ok=True)
+
+            # Get SSH settings
+            ssh_private_key = Setting.get("ssh_private_key", "")
+            ssh_password = Setting.get("ssh_default_password", "")
+
+            # Write SSH private key to temp file if provided
+            if ssh_private_key and ssh_private_key != "********":
+                ssh_key_path = os.path.join(work_dir, f"ssh_key_{execution_id}")
+                with open(ssh_key_path, "w") as f:
+                    f.write(ssh_private_key)
+                os.chmod(ssh_key_path, 0o600)
+
             # Set environment variables for Ansible
             env = os.environ.copy()
             env["HOME"] = work_dir
             env["ANSIBLE_LOCAL_TEMP"] = os.path.join(work_dir, ".ansible", "tmp")
             env["ANSIBLE_REMOTE_TEMP"] = "/tmp/.ansible-${USER}/tmp"
-            # Disable SSH host key checking (auto-accept new hosts)
+            # Disable SSH host key checking and use /dev/null for known_hosts
             env["ANSIBLE_HOST_KEY_CHECKING"] = "False"
 
+            ssh_args = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+            if ssh_key_path:
+                ssh_args += f" -i {ssh_key_path}"
+            env["ANSIBLE_SSH_ARGS"] = ssh_args
+
+            # If password auth, set it via environment
+            if ssh_password and ssh_password != "********" and not ssh_key_path:
+                env["ANSIBLE_SSH_PASSWORD"] = ssh_password
+
+            # Build command
+            cmd = [
+                "ansible-playbook",
+                "-i", inventory_path,
+                playbook_path,
+            ]
+
+            # Add password auth if needed (requires sshpass)
+            if ssh_password and ssh_password != "********" and not ssh_key_path:
+                cmd.insert(0, "sshpass")
+                cmd.insert(1, "-e")  # Read password from SSHPASS env var
+                env["SSHPASS"] = ssh_password
+
             result = subprocess.run(
-                [
-                    "ansible-playbook",
-                    "-i", inventory_path,
-                    playbook_path,
-                ],
+                cmd,
                 capture_output=True,
                 text=True,
                 timeout=3600,
@@ -135,7 +169,7 @@ def run_playbook(app, execution_id):
             db.session.commit()
 
             # Cleanup temp files
-            for path in [inventory_path, playbook_path]:
+            for path in [inventory_path, playbook_path, ssh_key_path]:
                 if path:
                     try:
                         os.remove(path)

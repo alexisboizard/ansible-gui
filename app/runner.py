@@ -1,12 +1,23 @@
 import os
 import json
 import datetime
+import re
 import tempfile
 import subprocess
 import yaml
 
 from app import db
 from app.models import Host, Execution
+
+
+def sanitize_group_name(name):
+    """Sanitize group name for Ansible (only letters, numbers, underscores)."""
+    # Replace invalid characters with underscores
+    sanitized = re.sub(r'[^a-zA-Z0-9_]', '_', name)
+    # Ensure it doesn't start with a number
+    if sanitized and sanitized[0].isdigit():
+        sanitized = '_' + sanitized
+    return sanitized or 'default'
 
 
 def generate_inventory(app, hosts_pattern="all"):
@@ -43,9 +54,10 @@ def generate_inventory(app, hosts_pattern="all"):
             groups = [g.strip() for g in (host.group_name or "all").split(",") if g.strip()]
             for group in groups:
                 if group != "all":
-                    if group not in inventory["all"]["children"]:
-                        inventory["all"]["children"][group] = {"hosts": {}}
-                    inventory["all"]["children"][group]["hosts"][host.hostname] = None
+                    safe_group = sanitize_group_name(group)
+                    if safe_group not in inventory["all"]["children"]:
+                        inventory["all"]["children"][safe_group] = {"hosts": {}}
+                    inventory["all"]["children"][safe_group]["hosts"][host.hostname] = None
 
         return inventory
 
@@ -78,11 +90,13 @@ def run_playbook(app, execution_id):
             with open(playbook_path, "w") as f:
                 f.write(playbook.content)
 
-            # Set environment variables for Ansible to use work_dir for temp files
+            # Set environment variables for Ansible
             env = os.environ.copy()
             env["HOME"] = work_dir
             env["ANSIBLE_LOCAL_TEMP"] = os.path.join(work_dir, ".ansible", "tmp")
             env["ANSIBLE_REMOTE_TEMP"] = "/tmp/.ansible-${USER}/tmp"
+            # Disable SSH host key checking (auto-accept new hosts)
+            env["ANSIBLE_HOST_KEY_CHECKING"] = "False"
 
             result = subprocess.run(
                 [

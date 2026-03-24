@@ -78,6 +78,12 @@ def run_playbook(app, execution_id):
             with open(playbook_path, "w") as f:
                 f.write(playbook.content)
 
+            # Set environment variables for Ansible to use work_dir for temp files
+            env = os.environ.copy()
+            env["HOME"] = work_dir
+            env["ANSIBLE_LOCAL_TEMP"] = os.path.join(work_dir, ".ansible", "tmp")
+            env["ANSIBLE_REMOTE_TEMP"] = "/tmp/.ansible-${USER}/tmp"
+
             result = subprocess.run(
                 [
                     "ansible-playbook",
@@ -88,6 +94,7 @@ def run_playbook(app, execution_id):
                 text=True,
                 timeout=3600,
                 cwd=work_dir,
+                env=env,
             )
 
             output = result.stdout

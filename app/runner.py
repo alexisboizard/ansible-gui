@@ -102,8 +102,12 @@ def run_playbook(app, execution_id):
             # Write SSH private key to temp file if provided
             if ssh_private_key and ssh_private_key != "********":
                 ssh_key_path = os.path.join(work_dir, f"ssh_key_{execution_id}")
+                # Ensure key has proper format (newline at end, proper line endings)
+                key_content = ssh_private_key.strip()
+                key_content = key_content.replace('\r\n', '\n').replace('\r', '\n')
+                key_content += '\n'  # SSH keys must end with newline
                 with open(ssh_key_path, "w") as f:
-                    f.write(ssh_private_key)
+                    f.write(key_content)
                 os.chmod(ssh_key_path, 0o600)
 
             # Set environment variables for Ansible

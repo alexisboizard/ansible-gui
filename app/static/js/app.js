@@ -501,10 +501,15 @@ function executePlaybook() {
     };
 
     api("POST", "/api/executions", data)
-        .then(() => {
+        .then((result) => {
             bootstrap.Modal.getInstance(document.getElementById("runModal")).hide();
-            showToast("Playbook lancé en arrière-plan");
+            showToast("Playbook lancé");
             document.querySelector('[data-tab="executions"]').click();
+            loadExecutions();
+            // Open output modal immediately for real-time streaming
+            if (result && result.id) {
+                setTimeout(() => viewOutput(result.id), 300);
+            }
         })
         .catch((e) => showToast(e.message, "danger"));
 }
@@ -536,10 +541,49 @@ function loadExecutions() {
     });
 }
 
+let outputPollingInterval = null;
+
 function viewOutput(executionId) {
-    api("GET", `/api/executions/${executionId}`).then((e) => {
-        document.getElementById("execution-output").textContent = e.output || "(en attente...)";
-        new bootstrap.Modal(document.getElementById("outputModal")).show();
+    const outputEl = document.getElementById("execution-output");
+    const modal = new bootstrap.Modal(document.getElementById("outputModal"));
+
+    // Clear any existing polling
+    if (outputPollingInterval) {
+        clearInterval(outputPollingInterval);
+        outputPollingInterval = null;
+    }
+
+    function updateOutput() {
+        api("GET", `/api/executions/${executionId}`).then((e) => {
+            outputEl.textContent = e.output || "(en attente...)";
+            // Auto-scroll to bottom
+            outputEl.scrollTop = outputEl.scrollHeight;
+
+            // Stop polling if execution is finished
+            if (e.status !== "running" && e.status !== "pending") {
+                if (outputPollingInterval) {
+                    clearInterval(outputPollingInterval);
+                    outputPollingInterval = null;
+                }
+                loadExecutions(); // Refresh list
+            }
+        });
+    }
+
+    // Initial load
+    updateOutput();
+    modal.show();
+
+    // Start polling every 500ms for real-time updates
+    outputPollingInterval = setInterval(updateOutput, 500);
+
+    // Stop polling when modal is closed
+    document.getElementById("outputModal").addEventListener("hidden.bs.modal", function handler() {
+        if (outputPollingInterval) {
+            clearInterval(outputPollingInterval);
+            outputPollingInterval = null;
+        }
+        this.removeEventListener("hidden.bs.modal", handler);
     });
 }
 

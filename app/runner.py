@@ -117,6 +117,9 @@ def run_playbook(app, execution_id):
             env["ANSIBLE_REMOTE_TEMP"] = "/tmp/.ansible-${USER}/tmp"
             # Disable SSH host key checking and use /dev/null for known_hosts
             env["ANSIBLE_HOST_KEY_CHECKING"] = "False"
+            # Force unbuffered output for real-time streaming
+            env["PYTHONUNBUFFERED"] = "1"
+            env["ANSIBLE_FORCE_COLOR"] = "0"  # Disable colors for cleaner output
 
             ssh_args = "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
             if ssh_key_path:
@@ -140,21 +143,36 @@ def run_playbook(app, execution_id):
                 cmd.insert(1, "-e")  # Read password from SSHPASS env var
                 env["SSHPASS"] = ssh_password
 
-            result = subprocess.run(
+            # Use Popen for real-time output streaming
+            process = subprocess.Popen(
                 cmd,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
                 text=True,
-                timeout=3600,
+                bufsize=1,
                 cwd=work_dir,
                 env=env,
             )
 
-            output = result.stdout
-            if result.stderr:
-                output += "\n--- STDERR ---\n" + result.stderr
+            output_lines = []
+            try:
+                for line in iter(process.stdout.readline, ''):
+                    if not line:
+                        break
+                    output_lines.append(line)
+                    # Update output in DB every line for real-time streaming
+                    execution.output = ''.join(output_lines)
+                    db.session.commit()
 
-            execution.output = output
-            execution.status = "success" if result.returncode == 0 else "failed"
+                process.wait(timeout=3600)
+                returncode = process.returncode
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+                raise
+
+            execution.output = ''.join(output_lines)
+            execution.status = "success" if returncode == 0 else "failed"
 
         except subprocess.TimeoutExpired:
             execution.output = "Execution timed out after 3600 seconds."

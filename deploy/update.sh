@@ -13,7 +13,7 @@ echo "==> Mise à jour d'Ansible GUI"
 
 echo "[1/5] Installation des dépendances système..."
 apt-get update -q
-apt-get install -y -q libxml2-dev libxslt-dev 2>/dev/null || true
+apt-get install -y -q libxml2-dev libxslt-dev python3-lxml 2>/dev/null || true
 
 echo "[2/5] Copie des fichiers..."
 rsync -a --exclude='.git' --exclude='venv' --exclude='__pycache__' \

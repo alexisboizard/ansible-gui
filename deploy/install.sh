@@ -19,7 +19,7 @@ echo "    Cible  : $APP_DIR"
 echo ""
 echo "[1/7] Installation des dépendances système..."
 apt-get update -q
-apt-get install -y -q python3 python3-pip python3-venv openssh-client sshpass ansible libxml2-dev libxslt-dev
+apt-get install -y -q python3 python3-pip python3-venv openssh-client sshpass ansible libxml2-dev libxslt-dev python3-lxml
 
 # ── 2. Utilisateur dédié ─────────────────────────────────────
 echo ""

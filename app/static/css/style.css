@@ -557,28 +557,17 @@ a:hover {
 }
 
 /* ──────────────────────────────────────────────
-   Playbook Modal Scrollable
-   ────────────────────────────────────────────── */
-#playbookModal .modal-dialog {
-    max-height: 90vh;
-}
-
-#playbookModal .modal-body {
-    max-height: 70vh;
-    overflow-y: auto;
-}
-
-/* ──────────────────────────────────────────────
    CodeMirror
    ────────────────────────────────────────────── */
 .CodeMirror {
-    height: auto;
-    min-height: 300px;
-    max-height: 50vh;
-    overflow-y: auto !important;
+    height: 400px !important;
     border: 1px solid var(--border-color);
     border-radius: 8px;
     font-size: 0.9rem;
+}
+
+.CodeMirror-scroll {
+    min-height: 400px;
 }
 
 /* ──────────────────────────────────────────────

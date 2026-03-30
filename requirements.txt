@@ -6,3 +6,4 @@ ansible-runner==2.4.0
 PyYAML==6.0.2
 gunicorn==23.0.0
 pywinrm>=0.4.3
+lxml>=5.0.0

@@ -547,6 +547,44 @@
   </div>
 </div>
 
+<!-- LDAP Test Modal -->
+<div class="modal-overlay" id="ldap-test-modal">
+  <div class="modal-box" style="max-width:560px">
+    <div class="modal-header">
+      <h3 class="modal-title">Test LDAP Connection</h3>
+      <button class="modal-close" onclick="closeModal('ldap-test-modal')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text-secondary);margin:0 0 16px">
+        Uses the LDAP settings currently saved. Optionally test with a real user account.
+      </p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Test Username (optional)</label>
+          <input type="text" class="form-control" id="ldap-test-user" placeholder="john.doe">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Test Password (optional)</label>
+          <input type="password" class="form-control" id="ldap-test-pass" placeholder="••••••••">
+        </div>
+      </div>
+      <div id="ldap-test-results" style="display:none">
+        <div style="height:1px;background:var(--border-color);margin-bottom:12px"></div>
+        <div id="ldap-test-steps"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('ldap-test-modal')">Close</button>
+      <button class="btn btn-primary" id="ldap-test-btn" onclick="runLdapTest()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Run Test
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- Playbook Import Modal -->
 <div class="modal-overlay" id="pb-import-modal">
   <div class="modal-box" style="max-width:480px">

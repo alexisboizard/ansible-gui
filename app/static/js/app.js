@@ -863,7 +863,15 @@ function renderSettings() {
     div.id = `settings-${section.category}`;
     div.className = `settings-section${idx === 0 ? ' active' : ''}`;
 
-    let html = `<h3 style="font-size:15px;font-weight:600;margin:0 0 16px">${section.label}</h3>`;
+    const testBtn = section.category === 'auth'
+      ? `<button class="btn btn-secondary btn-sm" onclick="openLdapTestModal()" style="margin-left:auto">
+           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+           Test LDAP
+         </button>`
+      : '';
+    let html = `<div style="display:flex;align-items:center;margin-bottom:16px">
+      <h3 style="font-size:15px;font-weight:600;margin:0">${section.label}</h3>${testBtn}
+    </div>`;
     for (const field of section.fields) {
       const val = settingsData[field.key] || '';
       const hint = field.hint ? `<div style="font-size:11px;color:var(--text-muted);margin-top:4px">${field.hint}</div>` : '';
@@ -900,6 +908,54 @@ async function saveSettings() {
   const res = await api('POST', '/api/settings', data);
   if (res.ok) toast('Settings saved', 'success');
   else toast('Failed to save settings', 'error');
+}
+
+// ── LDAP Test ─────────────────────────────────────────────────────────────────
+
+function openLdapTestModal() {
+  document.getElementById('ldap-test-user').value = '';
+  document.getElementById('ldap-test-pass').value = '';
+  document.getElementById('ldap-test-results').style.display = 'none';
+  document.getElementById('ldap-test-steps').innerHTML = '';
+  showModal('ldap-test-modal');
+}
+
+async function runLdapTest() {
+  const btn = document.getElementById('ldap-test-btn');
+  btn.disabled = true;
+  btn.textContent = 'Testing…';
+
+  const resultsEl = document.getElementById('ldap-test-results');
+  const stepsEl = document.getElementById('ldap-test-steps');
+  resultsEl.style.display = 'none';
+  stepsEl.innerHTML = '';
+
+  const res = await api('POST', '/api/settings/test-ldap', {
+    test_username: document.getElementById('ldap-test-user').value.trim(),
+    test_password: document.getElementById('ldap-test-pass').value,
+  });
+
+  btn.disabled = false;
+  btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Run Test`;
+
+  const data = await res.json();
+  resultsEl.style.display = '';
+
+  for (const s of (data.steps || [])) {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:flex-start;gap:8px;padding:5px 0;font-size:13px;border-bottom:1px solid var(--border-color)';
+    const icon = s.ok
+      ? `<span style="color:var(--success);flex-shrink:0">✓</span>`
+      : `<span style="color:var(--danger);flex-shrink:0">✗</span>`;
+    row.innerHTML = `${icon}<span style="color:${s.ok ? 'var(--text-primary)' : 'var(--danger)'}">${s.msg}</span>`;
+    stepsEl.appendChild(row);
+  }
+
+  if (data.ok) {
+    toast('LDAP test passed', 'success');
+  } else {
+    toast('LDAP test failed — check steps above', 'error');
+  }
 }
 
 // ── Modal helpers ─────────────────────────────────────────────────────────────

@@ -616,3 +616,105 @@ def api_settings_save():
 @login_required
 def api_settings_schema():
     return jsonify(SETTINGS_SCHEMA)
+
+
+@bp.route("/api/settings/test-ldap", methods=["POST"])
+@login_required
+def api_settings_test_ldap():
+    """Test LDAP connection step by step and return diagnostic info."""
+    steps = []
+
+    def step(msg, ok=True):
+        steps.append({"msg": msg, "ok": ok})
+
+    try:
+        from ldap3 import Server, Connection, ALL, SIMPLE, SUBTREE
+        from ldap3.core.exceptions import LDAPException, LDAPBindError
+    except ImportError:
+        return jsonify({"ok": False, "steps": [{"msg": "ldap3 not installed", "ok": False}]})
+
+    data = request.get_json() or {}
+    # Use posted values OR fall back to saved settings
+    server_addr = data.get("ldap_server") or Setting.get("ldap_server", "")
+    port        = int(data.get("ldap_port") or Setting.get("ldap_port", "389") or 389)
+    base_dn     = data.get("ldap_base_dn") or Setting.get("ldap_base_dn", "")
+    bind_dn     = data.get("ldap_bind_dn") or Setting.get("ldap_bind_dn", "")
+    bind_pass   = data.get("ldap_bind_password") or Setting.get("ldap_bind_password", "")
+    user_filter = data.get("ldap_user_filter") or Setting.get("ldap_user_filter", "(sAMAccountName={username})")
+    use_ssl     = (data.get("ldap_use_ssl") or Setting.get("ldap_use_ssl", "false")).lower() == "true"
+    test_user   = data.get("test_username", "").strip()
+    test_pass   = data.get("test_password", "")
+
+    if not server_addr:
+        return jsonify({"ok": False, "steps": [{"msg": "No LDAP server configured", "ok": False}]})
+
+    step(f"Connecting to {server_addr}:{port} (SSL={use_ssl})")
+
+    try:
+        server = Server(server_addr, port=port, use_ssl=use_ssl, get_info=ALL,
+                        connect_timeout=5)
+        step("Server object created")
+    except Exception as e:
+        step(f"Failed to create server: {e}", ok=False)
+        return jsonify({"ok": False, "steps": steps})
+
+    # Service account bind
+    try:
+        if bind_dn and bind_pass:
+            conn = Connection(server, user=bind_dn, password=bind_pass,
+                              authentication=SIMPLE, auto_bind=True,
+                              receive_timeout=5)
+            step(f"Service account bind OK ({bind_dn})")
+        else:
+            conn = Connection(server, auto_bind=True, receive_timeout=5)
+            step("Anonymous bind OK")
+    except LDAPBindError as e:
+        step(f"Bind failed: {e}", ok=False)
+        return jsonify({"ok": False, "steps": steps})
+    except LDAPException as e:
+        step(f"LDAP connection error: {e}", ok=False)
+        return jsonify({"ok": False, "steps": steps})
+    except Exception as e:
+        step(f"Connection error: {e}", ok=False)
+        return jsonify({"ok": False, "steps": steps})
+
+    # Search for test user (optional)
+    if test_user:
+        filt = user_filter.replace("{username}", test_user)
+        step(f"Searching: base='{base_dn}' filter='{filt}'")
+        try:
+            conn.search(base_dn, filt, search_scope=SUBTREE,
+                        attributes=["distinguishedName", "cn", "sAMAccountName"])
+            if conn.entries:
+                user_dn = conn.entries[0].entry_dn
+                step(f"User found: {user_dn}")
+
+                # Try password
+                if test_pass:
+                    conn.unbind()
+                    try:
+                        user_conn = Connection(server, user=user_dn, password=test_pass,
+                                               authentication=SIMPLE, auto_bind=True,
+                                               receive_timeout=5)
+                        if user_conn.bound:
+                            step("Password verification OK — auth would succeed")
+                            user_conn.unbind()
+                            return jsonify({"ok": True, "steps": steps})
+                    except LDAPBindError:
+                        step("Password verification FAILED — wrong password", ok=False)
+                        return jsonify({"ok": False, "steps": steps})
+                else:
+                    step("No test password provided — skipping password check")
+            else:
+                step(f"User '{test_user}' NOT found in directory", ok=False)
+                conn.unbind()
+                return jsonify({"ok": False, "steps": steps})
+        except Exception as e:
+            step(f"Search error: {e}", ok=False)
+            conn.unbind()
+            return jsonify({"ok": False, "steps": steps})
+    else:
+        step("Connection & bind successful (no test user specified)")
+
+    conn.unbind()
+    return jsonify({"ok": True, "steps": steps})

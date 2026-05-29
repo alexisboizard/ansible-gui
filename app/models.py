@@ -79,6 +79,8 @@ class Execution(db.Model):
     finished_at = db.Column(db.DateTime, nullable=True)
     triggered_by = db.Column(db.String(100), default="manual")
 
+    playbook = db.relationship("Playbook", backref="executions")
+
     def to_dict(self):
         return {
             "id": self.id,

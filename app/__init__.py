@@ -19,6 +19,8 @@ def _migrate(db_path):
         # Schedule last run columns
         "ALTER TABLE schedule ADD COLUMN last_run_at DATETIME",
         "ALTER TABLE schedule ADD COLUMN last_run_status VARCHAR(50)",
+        # Playbook folder
+        "ALTER TABLE playbook ADD COLUMN folder_id INTEGER REFERENCES folder(id)",
     ]
 
     for sql in migrations:

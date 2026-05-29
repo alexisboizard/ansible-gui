@@ -823,3 +823,79 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   color: var(--accent);
   border: 1px solid rgba(108, 99, 255, 0.2);
 }
+
+/* ── Playbooks layout (folders + grid) ── */
+.playbooks-layout {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.folders-panel {
+  width: 200px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 80px;
+}
+
+.folder-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  transition: all 0.15s;
+  border-radius: 0;
+}
+
+.folder-item:hover { background: rgba(255,255,255,0.04); color: var(--text-primary); }
+.folder-item.active { background: var(--accent-glow); color: var(--accent); }
+
+.folder-item svg { width: 14px; height: 14px; flex-shrink: 0; opacity: 0.7; }
+.folder-item.active svg { opacity: 1; }
+
+.folder-item-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.folder-item-actions {
+  display: none;
+  gap: 2px;
+}
+
+.folder-item:hover .folder-item-actions { display: flex; }
+
+.folder-action-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+}
+.folder-action-btn:hover { color: var(--text-primary); }
+.folder-action-btn svg { width: 12px; height: 12px; }
+
+/* Playbook card folder badge */
+.pb-folder-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(17, 205, 239, 0.1);
+  color: var(--info);
+  border: 1px solid rgba(17, 205, 239, 0.2);
+}
+
+@media (max-width: 768px) {
+  .playbooks-layout { flex-direction: column; }
+  .folders-panel { width: 100%; position: static; }
+}

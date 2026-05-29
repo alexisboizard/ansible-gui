@@ -250,6 +250,8 @@ async function importHosts() {
 // ── Playbooks ─────────────────────────────────────────────────────────────────
 
 let playbooksData = [];
+let foldersData = [];
+let activeFolderId = null; // null = All
 let cmEditor = null;
 
 const defaultPlaybook = `---
@@ -263,31 +265,108 @@ const defaultPlaybook = `---
 `;
 
 async function loadPlaybooks() {
-  const res = await api('GET', '/api/playbooks');
-  playbooksData = await res.json();
+  const [pbRes, folderRes] = await Promise.all([
+    api('GET', '/api/playbooks'),
+    api('GET', '/api/folders'),
+  ]);
+  playbooksData = await pbRes.json();
+  foldersData = await folderRes.json();
+  renderFolders();
   renderPlaybooks();
+}
+
+function renderFolders() {
+  const list = document.getElementById('folders-list');
+  list.innerHTML = '';
+
+  const allBtn = document.createElement('button');
+  allBtn.className = `folder-item${activeFolderId === null ? ' active' : ''}`;
+  allBtn.innerHTML = `
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+    <span class="folder-item-name">All Playbooks</span>
+    <span style="font-size:11px;color:var(--text-muted);margin-left:auto">${playbooksData.length}</span>
+  `;
+  allBtn.onclick = () => { activeFolderId = null; renderFolders(); renderPlaybooks(); };
+  list.appendChild(allBtn);
+
+  const unfiled = playbooksData.filter(p => !p.folder_id);
+  if (unfiled.length > 0) {
+    const unfiledBtn = document.createElement('button');
+    unfiledBtn.className = `folder-item${activeFolderId === 'unfiled' ? ' active' : ''}`;
+    unfiledBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      <span class="folder-item-name">Unfiled</span>
+      <span style="font-size:11px;color:var(--text-muted);margin-left:auto">${unfiled.length}</span>
+    `;
+    unfiledBtn.onclick = () => { activeFolderId = 'unfiled'; renderFolders(); renderPlaybooks(); };
+    list.appendChild(unfiledBtn);
+  }
+
+  if (foldersData.length > 0) {
+    const sep = document.createElement('div');
+    sep.style.cssText = 'height:1px;background:var(--border-color);margin:6px 0';
+    list.appendChild(sep);
+  }
+
+  for (const f of foldersData) {
+    const count = playbooksData.filter(p => p.folder_id === f.id).length;
+    const item = document.createElement('button');
+    item.className = `folder-item${activeFolderId === f.id ? ' active' : ''}`;
+    item.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      <span class="folder-item-name">${f.name}</span>
+      <span style="font-size:11px;color:var(--text-muted)">${count}</span>
+      <div class="folder-item-actions">
+        <button class="folder-action-btn" title="Rename" onclick="event.stopPropagation();openFolderModal(${f.id})">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="folder-action-btn" title="Delete" onclick="event.stopPropagation();deleteFolder(${f.id})" style="color:var(--danger)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
+        </button>
+      </div>
+    `;
+    item.onclick = () => { activeFolderId = f.id; renderFolders(); renderPlaybooks(); };
+    list.appendChild(item);
+  }
 }
 
 function renderPlaybooks() {
   const container = document.getElementById('playbooks-grid');
+  const titleEl = document.getElementById('playbooks-folder-title');
   container.innerHTML = '';
 
-  if (playbooksData.length === 0) {
+  let filtered = playbooksData;
+  if (activeFolderId === null) {
+    titleEl.textContent = 'All Playbooks';
+  } else if (activeFolderId === 'unfiled') {
+    filtered = playbooksData.filter(p => !p.folder_id);
+    titleEl.textContent = 'Unfiled';
+  } else {
+    const folder = foldersData.find(f => f.id === activeFolderId);
+    filtered = playbooksData.filter(p => p.folder_id === activeFolderId);
+    titleEl.textContent = folder ? folder.name : 'Folder';
+  }
+
+  if (filtered.length === 0) {
     container.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-      <p>No playbooks yet. Create your first one!</p></div>`;
+      <p>No playbooks here. Create one or move existing playbooks to this folder.</p></div>`;
     return;
   }
 
-  for (const p of playbooksData) {
+  for (const p of filtered) {
+    const folderBadge = p.folder_name
+      ? `<span class="pb-folder-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:10px;height:10px"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>${p.folder_name}</span>`
+      : '';
+
     const card = document.createElement('div');
     card.className = 'card';
     card.style.cssText = 'cursor:default';
     card.innerHTML = `
       <div class="card-body">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px">
-          <div>
-            <div style="font-weight:600;font-size:14px">${p.name}</div>
+          <div style="min-width:0">
+            <div style="font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.name}</div>
             <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${p.description || 'No description'}</div>
           </div>
           <div style="display:flex;gap:4px;flex-shrink:0">
@@ -302,10 +381,56 @@ function renderPlaybooks() {
             </button>
           </div>
         </div>
-        <div style="font-size:11px;color:var(--text-muted)">Updated ${fmtDate(p.updated_at)}</div>
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div>${folderBadge}</div>
+          <div style="font-size:11px;color:var(--text-muted)">Updated ${fmtDate(p.updated_at)}</div>
+        </div>
       </div>
     `;
     container.appendChild(card);
+  }
+}
+
+// ── Folder CRUD ───────────────────────────────────────────────────────────────
+
+function openFolderModal(id = null) {
+  const folder = id ? foldersData.find(f => f.id === id) : null;
+  document.getElementById('folder-modal-title').textContent = folder ? 'Rename Folder' : 'New Folder';
+  document.getElementById('folder-id').value = folder ? folder.id : '';
+  document.getElementById('folder-name').value = folder ? folder.name : '';
+  showModal('folder-modal');
+  setTimeout(() => document.getElementById('folder-name').focus(), 50);
+}
+
+async function saveFolder() {
+  const id = document.getElementById('folder-id').value;
+  const name = document.getElementById('folder-name').value.trim();
+  if (!name) { toast('Folder name is required', 'error'); return; }
+
+  const res = id
+    ? await api('PUT', `/api/folders/${id}`, { name })
+    : await api('POST', '/api/folders', { name });
+
+  if (res.ok) {
+    toast(id ? 'Folder renamed' : 'Folder created', 'success');
+    closeModal('folder-modal');
+    loadPlaybooks();
+  } else {
+    const err = await res.json().catch(() => ({}));
+    toast(err.error || 'Failed to save folder', 'error');
+  }
+}
+
+async function deleteFolder(id) {
+  const folder = foldersData.find(f => f.id === id);
+  if (!confirm(`Delete folder "${folder?.name}"? Playbooks inside will become unfiled.`)) return;
+  const res = await api('DELETE', `/api/folders/${id}`);
+  if (res.ok) {
+    if (activeFolderId === id) activeFolderId = null;
+    toast('Folder deleted', 'success');
+    loadPlaybooks();
+  } else {
+    toast('Failed to delete folder', 'error');
   }
 }
 
@@ -317,6 +442,19 @@ function openPlaybookModal(id = null) {
   document.getElementById('pb-id').value = pb ? pb.id : '';
   document.getElementById('pb-name').value = pb ? pb.name : '';
   document.getElementById('pb-description').value = pb ? (pb.description || '') : '';
+
+  // Populate folder dropdown
+  const folderSelect = document.getElementById('pb-folder');
+  folderSelect.innerHTML = '<option value="">— No folder —</option>';
+  for (const f of foldersData) {
+    const opt = document.createElement('option');
+    opt.value = f.id;
+    opt.textContent = f.name;
+    if (pb && pb.folder_id === f.id) opt.selected = true;
+    // Pre-select current active folder for new playbooks
+    if (!pb && activeFolderId && activeFolderId !== 'unfiled' && activeFolderId === f.id) opt.selected = true;
+    folderSelect.appendChild(opt);
+  }
 
   // Destroy existing CodeMirror BEFORE showing modal
   if (cmEditor) {
@@ -356,10 +494,12 @@ async function savePlaybook() {
   const id = document.getElementById('pb-id').value;
   const content = cmEditor ? cmEditor.getValue() : document.getElementById('pb-content').value;
 
+  const folderVal = document.getElementById('pb-folder').value;
   const data = {
     name: document.getElementById('pb-name').value.trim(),
     description: document.getElementById('pb-description').value.trim(),
     content,
+    folder_id: folderVal ? parseInt(folderVal) : null,
   };
 
   if (!data.name) { toast('Playbook name is required', 'error'); return; }

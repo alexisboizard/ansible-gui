@@ -17,7 +17,7 @@ from flask import (
 
 from app import db
 from app.auth import authenticate, login_required
-from app.models import Execution, Host, Playbook, Schedule, Setting
+from app.models import Execution, Folder, Host, Playbook, Schedule, Setting
 
 bp = Blueprint("main", __name__)
 
@@ -247,6 +247,55 @@ def api_hosts_import():
     return jsonify({"ok": True, "imported": imported})
 
 
+# ──────────────────── FOLDERS ────────────────────
+
+@bp.route("/api/folders", methods=["GET"])
+@login_required
+def api_folders():
+    folders = Folder.query.order_by(Folder.name).all()
+    return jsonify([f.to_dict() for f in folders])
+
+
+@bp.route("/api/folders", methods=["POST"])
+@login_required
+def api_folders_create():
+    data = request.get_json() or {}
+    name = data.get("name", "").strip()
+    if not name:
+        return jsonify({"error": "Name is required"}), 400
+    if Folder.query.filter_by(name=name).first():
+        return jsonify({"error": "Folder already exists"}), 409
+    folder = Folder(name=name)
+    db.session.add(folder)
+    db.session.commit()
+    return jsonify(folder.to_dict()), 201
+
+
+@bp.route("/api/folders/<int:folder_id>", methods=["PUT"])
+@login_required
+def api_folders_update(folder_id):
+    folder = Folder.query.get_or_404(folder_id)
+    data = request.get_json() or {}
+    name = data.get("name", "").strip()
+    if not name:
+        return jsonify({"error": "Name is required"}), 400
+    folder.name = name
+    db.session.commit()
+    return jsonify(folder.to_dict())
+
+
+@bp.route("/api/folders/<int:folder_id>", methods=["DELETE"])
+@login_required
+def api_folders_delete(folder_id):
+    folder = Folder.query.get_or_404(folder_id)
+    # Unassign playbooks from this folder instead of deleting them
+    for pb in folder.playbooks:
+        pb.folder_id = None
+    db.session.delete(folder)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
 # ──────────────────── PLAYBOOKS ────────────────────
 
 @bp.route("/api/playbooks", methods=["GET"])
@@ -260,10 +309,12 @@ def api_playbooks():
 @login_required
 def api_playbooks_create():
     data = request.get_json() or {}
+    folder_id = data.get("folder_id") or None
     playbook = Playbook(
         name=data.get("name", ""),
         description=data.get("description", ""),
         content=data.get("content", ""),
+        folder_id=folder_id,
     )
     db.session.add(playbook)
     db.session.commit()
@@ -278,6 +329,7 @@ def api_playbooks_update(pb_id):
     pb.name = data.get("name", pb.name)
     pb.description = data.get("description", pb.description)
     pb.content = data.get("content", pb.content)
+    pb.folder_id = data.get("folder_id", pb.folder_id) or None
     pb.updated_at = datetime.utcnow()
     db.session.commit()
     return jsonify(pb.to_dict())

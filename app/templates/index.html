@@ -204,14 +204,31 @@
 
     <!-- ── Playbooks Page ── -->
     <section class="page" id="page-playbooks">
-      <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
-        <button class="btn btn-primary" onclick="openPlaybookModal()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          New Playbook
-        </button>
-      </div>
-      <div id="playbooks-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
-        <div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:24px">Loading...</div>
+      <div class="playbooks-layout">
+        <!-- Folder sidebar -->
+        <aside class="folders-panel card">
+          <div class="card-header" style="padding:12px 14px">
+            <span class="card-title" style="font-size:13px">Folders</span>
+            <button class="btn btn-icon btn-sm" title="New folder" onclick="openFolderModal()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+          </div>
+          <div id="folders-list" style="padding:8px 0"></div>
+        </aside>
+
+        <!-- Playbooks area -->
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+            <h3 class="card-title" id="playbooks-folder-title" style="margin:0">All Playbooks</h3>
+            <button class="btn btn-primary" onclick="openPlaybookModal()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              New Playbook
+            </button>
+          </div>
+          <div id="playbooks-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
+            <div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:24px">Loading...</div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -377,7 +394,7 @@
     </div>
     <div class="modal-body">
       <input type="hidden" id="pb-id">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
         <div class="form-group" style="margin:0">
           <label class="form-label">Name</label>
           <input type="text" class="form-control" id="pb-name" placeholder="deploy-app">
@@ -385,6 +402,12 @@
         <div class="form-group" style="margin:0">
           <label class="form-label">Description</label>
           <input type="text" class="form-control" id="pb-description" placeholder="Short description">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Folder</label>
+          <select class="form-control" id="pb-folder">
+            <option value="">— No folder —</option>
+          </select>
         </div>
       </div>
       <div class="form-group" style="margin:0">
@@ -496,6 +519,30 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('sched-modal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveSchedule()">Save Schedule</button>
+    </div>
+  </div>
+</div>
+
+<!-- Folder Modal -->
+<div class="modal-overlay" id="folder-modal">
+  <div class="modal-box" style="max-width:400px">
+    <div class="modal-header">
+      <h3 class="modal-title" id="folder-modal-title">New Folder</h3>
+      <button class="modal-close" onclick="closeModal('folder-modal')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="folder-id">
+      <div class="form-group">
+        <label class="form-label">Folder Name</label>
+        <input type="text" class="form-control" id="folder-name" placeholder="Infrastructure"
+          onkeydown="if(event.key==='Enter')saveFolder()">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('folder-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveFolder()">Save</button>
     </div>
   </div>
 </div>

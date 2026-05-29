@@ -56,6 +56,24 @@ def _migrate(db_path):
         """)
         conn.commit()
 
+    # ── Execution table: add missing columns from old schema ──────────────────
+    exec_cols = _get_columns(cur, "execution")
+    exec_migrations = []
+    if "playbook_name" not in exec_cols:
+        exec_migrations.append("ALTER TABLE execution ADD COLUMN playbook_name VARCHAR(255)")
+    if "host_pattern" not in exec_cols:
+        exec_migrations.append("ALTER TABLE execution ADD COLUMN host_pattern VARCHAR(500) DEFAULT 'all'")
+    if "triggered_by" not in exec_cols:
+        exec_migrations.append("ALTER TABLE execution ADD COLUMN triggered_by VARCHAR(100) DEFAULT 'manual'")
+    if "playbook_id" not in exec_cols:
+        exec_migrations.append("ALTER TABLE execution ADD COLUMN playbook_id INTEGER REFERENCES playbook(id)")
+
+    for sql in exec_migrations:
+        try:
+            cur.execute(sql)
+        except sqlite3.OperationalError:
+            pass
+
     # ── Standard ADD COLUMN migrations ────────────────────────────────────────
     host_cols = _get_columns(cur, "host")
     playbook_cols = _get_columns(cur, "playbook")

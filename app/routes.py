@@ -192,7 +192,14 @@ def api_hosts_delete(host_id):
 @login_required
 def api_hosts_ping():
     from app.ping import ping_all_hosts
-    thread = threading.Thread(target=ping_all_hosts, daemon=True)
+    from flask import current_app
+    app = current_app._get_current_object()
+
+    def _run():
+        with app.app_context():
+            ping_all_hosts()
+
+    thread = threading.Thread(target=_run, daemon=True)
     thread.start()
     return jsonify({"ok": True, "message": "Ping started"})
 

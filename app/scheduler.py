@@ -2,6 +2,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 _scheduler = None
+_app = None
 
 
 def get_scheduler():
@@ -9,7 +10,8 @@ def get_scheduler():
 
 
 def setup_scheduler(app):
-    global _scheduler
+    global _scheduler, _app
+    _app = app
     _scheduler = BackgroundScheduler()
 
     with app.app_context():
@@ -30,24 +32,19 @@ def setup_scheduler(app):
 
 
 def _ping_job():
-    from app import create_app
     from app.ping import ping_all_hosts
-
-    app = create_app()
-    with app.app_context():
+    with _app.app_context():
         ping_all_hosts()
 
 
 def execute_scheduled_playbook(schedule_id):
     """Run a scheduled playbook execution."""
-    from app import create_app
     from app.models import Execution, Schedule, db
     from app.runner import run_playbook
     from datetime import datetime
     import threading
 
-    app = create_app()
-    with app.app_context():
+    with _app.app_context():
         schedule = Schedule.query.get(schedule_id)
         if not schedule or not schedule.enabled:
             return

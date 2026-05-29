@@ -990,7 +990,10 @@ function renderUsers() {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${u.id}</td>
-      <td><strong>${u.username}</strong></td>
+      <td>
+        <strong>${u.username}</strong>
+        ${u.is_ldap ? '<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(108,99,255,0.15);color:#6c63ff;margin-left:6px">LDAP</span>' : ''}
+      </td>
       <td><span class="badge ${u.role === 'admin' ? 'badge-info' : 'badge-muted'}">${u.role || 'admin'}</span></td>
       <td>${fmtDate(u.created_at)}</td>
       <td>
@@ -1010,6 +1013,7 @@ function renderUsers() {
 
 function openUserModal(id = null) {
   const user = id ? usersData.find(u => u.id === id) : null;
+  const isLdap = user && user.is_ldap;
   document.getElementById('user-modal-title').textContent = user ? 'Edit User' : 'New User';
   document.getElementById('user-id').value = user ? user.id : '';
   document.getElementById('user-username').value = user ? user.username : '';
@@ -1018,6 +1022,11 @@ function openUserModal(id = null) {
   document.getElementById('user-role').value = user ? (user.role || 'admin') : 'admin';
   document.getElementById('user-password').value = '';
   document.getElementById('user-password-confirm').value = '';
+  // Hide password fields for LDAP users
+  const pwGroup = document.getElementById('user-password-group');
+  const pwConfGroup = document.getElementById('user-password-confirm-group');
+  if (pwGroup) pwGroup.style.display = isLdap ? 'none' : '';
+  if (pwConfGroup) pwConfGroup.style.display = isLdap ? 'none' : '';
   showModal('user-modal');
 }
 

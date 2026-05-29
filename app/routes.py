@@ -91,13 +91,25 @@ def login_page():
 
 @bp.route("/api/login", methods=["POST"])
 def api_login():
+    from app.models import LocalUser
     data = request.get_json() or {}
     username = data.get("username", "").strip()
     password = data.get("password", "")
     ok, user = authenticate(username, password)
     if ok:
+        # Auto-provision LDAP users on first login so their role is manageable
+        local = LocalUser.query.filter_by(username=username).first()
+        if not local:
+            default_role = Setting.get("ldap_default_role", "admin") or "admin"
+            local = LocalUser(username=username, role=default_role)
+            # Unusable password hash — LDAP handles auth, this record is role-only
+            import os as _os
+            local.salt = _os.urandom(16).hex()
+            local.password_hash = "ldap:cannot-login-locally"
+            db.session.add(local)
+            db.session.commit()
         session["user"] = user
-        session["role"] = get_role_for_user(user)
+        session["role"] = local.role or "admin"
         return jsonify({"ok": True})
     return jsonify({"ok": False, "error": "Invalid credentials"}), 401
 
@@ -639,8 +651,13 @@ def api_settings_schema():
 def api_users():
     users = LocalUser.query.order_by(LocalUser.id).all()
     return jsonify([
-        {"id": u.id, "username": u.username, "role": u.role or "admin",
-         "created_at": u.created_at.isoformat() if u.created_at else None}
+        {
+            "id": u.id,
+            "username": u.username,
+            "role": u.role or "admin",
+            "is_ldap": u.password_hash.startswith("ldap:") if u.password_hash else False,
+            "created_at": u.created_at.isoformat() if u.created_at else None,
+        }
         for u in users
     ])
 
@@ -672,10 +689,13 @@ def api_users_create():
 @admin_required
 def api_users_update(user_id):
     user = LocalUser.query.get_or_404(user_id)
+    is_ldap = user.password_hash and user.password_hash.startswith("ldap:")
     data = request.get_json() or {}
     password = data.get("password", "")
     role = data.get("role")
     if password:
+        if is_ldap:
+            return jsonify({"error": "Cannot set password for an LDAP user"}), 400
         user.set_password(password)
     if role in ("admin", "readonly"):
         # Prevent demoting the last admin

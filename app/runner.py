@@ -80,6 +80,18 @@ def run_playbook(execution_id):
                 playbook_path,
             ]
 
+            if execution.extra_vars and execution.extra_vars.strip():
+                cmd += ["--extra-vars", execution.extra_vars.strip()]
+
+            if execution.check_mode:
+                cmd += ["--check"]
+
+            if execution.tags and execution.tags.strip():
+                cmd += ["--tags", execution.tags.strip()]
+
+            if execution.skip_tags and execution.skip_tags.strip():
+                cmd += ["--skip-tags", execution.skip_tags.strip()]
+
             execution.status = "running"
             execution.output = ""
             db.session.commit()
@@ -106,6 +118,13 @@ def run_playbook(execution_id):
         finally:
             execution.finished_at = datetime.utcnow()
             db.session.commit()
+
+            try:
+                from app.notify import notify_execution
+                notify_execution(execution)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Notification error: {e}")
 
             # Cleanup
             import shutil

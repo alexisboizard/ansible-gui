@@ -68,6 +68,15 @@ def _migrate(db_path):
     if "playbook_id" not in exec_cols:
         exec_migrations.append("ALTER TABLE execution ADD COLUMN playbook_id INTEGER REFERENCES playbook(id)")
 
+    for col, ddl in [
+        ("extra_vars", "ALTER TABLE execution ADD COLUMN extra_vars TEXT DEFAULT ''"),
+        ("check_mode", "ALTER TABLE execution ADD COLUMN check_mode BOOLEAN DEFAULT 0"),
+        ("tags", "ALTER TABLE execution ADD COLUMN tags VARCHAR(500) DEFAULT ''"),
+        ("skip_tags", "ALTER TABLE execution ADD COLUMN skip_tags VARCHAR(500) DEFAULT ''"),
+    ]:
+        if col not in exec_cols:
+            exec_migrations.append(ddl)
+
     for sql in exec_migrations:
         try:
             cur.execute(sql)

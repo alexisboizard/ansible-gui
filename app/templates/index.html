@@ -64,6 +64,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M19.07 19.07l-1.41-1.41M4.93 19.07l1.41-1.41M1 12h2M21 12h2M12 1v2M12 21v2"/></svg>
         <span>Settings</span>
       </button>
+      <button class="sidebar-link" data-page="users" onclick="showPage('users')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>Users</span>
+      </button>
     </nav>
 
     <div class="sidebar-footer">
@@ -321,6 +325,34 @@
         </div>
       </div>
     </section>
+
+    <!-- ── Users Page ── -->
+    <section class="page" id="page-users">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Local Users</h3>
+          <button class="btn btn-primary" onclick="openUserModal()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New User
+          </button>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:60px">#</th>
+                <th>Username</th>
+                <th>Created</th>
+                <th style="width:100px">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="users-tbody">
+              <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:24px">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   </main>
 </div>
 
@@ -448,7 +480,7 @@
 
 <!-- Run Modal -->
 <div class="modal-overlay" id="run-modal">
-  <div class="modal-box">
+  <div class="modal-box" style="max-width:520px">
     <div class="modal-header">
       <h3 class="modal-title">Run Playbook</h3>
       <button class="modal-close" onclick="closeModal('run-modal')">
@@ -456,15 +488,29 @@
       </button>
     </div>
     <div class="modal-body">
-      <p style="font-size:13px;color:var(--text-secondary)">
+      <p style="font-size:13px;color:var(--text-secondary);margin:0 0 16px">
         Running: <strong id="run-playbook-name"></strong>
       </p>
       <div class="form-group">
-        <label class="form-label">Host Pattern</label>
-        <input type="text" class="form-control" id="run-host-pattern" value="all" placeholder="all">
-        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
-          Use <code>all</code> for all hosts, a group name, hostname, or comma-separated list
+        <label class="form-label">Extra Variables <span style="color:var(--text-muted);font-weight:400;text-transform:none">(optional)</span></label>
+        <textarea class="form-control" id="run-extra-vars" rows="3" placeholder='key=value or {"key": "value"}'></textarea>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">JSON or key=value pairs passed as --extra-vars</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Tags <span style="color:var(--text-muted);font-weight:400;text-transform:none">(optional)</span></label>
+          <input type="text" class="form-control" id="run-tags" placeholder="deploy,configure">
         </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Skip Tags <span style="color:var(--text-muted);font-weight:400;text-transform:none">(optional)</span></label>
+          <input type="text" class="form-control" id="run-skip-tags" placeholder="debug">
+        </div>
+      </div>
+      <div class="form-group" style="margin-top:12px;margin-bottom:0">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:500">
+          <input type="checkbox" id="run-check-mode" style="width:16px;height:16px;cursor:pointer">
+          Dry run (--check mode) — simulate without making changes
+        </label>
       </div>
     </div>
     <div class="modal-footer">
@@ -636,6 +682,37 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('folder-modal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveFolder()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- User Modal -->
+<div class="modal-overlay" id="user-modal">
+  <div class="modal-box" style="max-width:420px">
+    <div class="modal-header">
+      <h3 class="modal-title" id="user-modal-title">New User</h3>
+      <button class="modal-close" onclick="closeModal('user-modal')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="user-id">
+      <div class="form-group" id="user-username-group">
+        <label class="form-label">Username</label>
+        <input type="text" class="form-control" id="user-username" placeholder="john.doe">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input type="password" class="form-control" id="user-password" placeholder="••••••••">
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">Confirm Password</label>
+        <input type="password" class="form-control" id="user-password-confirm" placeholder="••••••••">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('user-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveUser()">Save</button>
     </div>
   </div>
 </div>

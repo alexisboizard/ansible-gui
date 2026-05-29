@@ -78,6 +78,10 @@ class Execution(db.Model):
     started_at = db.Column(db.DateTime, default=datetime.utcnow)
     finished_at = db.Column(db.DateTime, nullable=True)
     triggered_by = db.Column(db.String(100), default="manual")
+    extra_vars = db.Column(db.Text, default="")
+    check_mode = db.Column(db.Boolean, default=False)
+    tags = db.Column(db.String(500), default="")
+    skip_tags = db.Column(db.String(500), default="")
 
     playbook = db.relationship("Playbook", backref="executions")
 
@@ -92,6 +96,10 @@ class Execution(db.Model):
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "finished_at": self.finished_at.isoformat() if self.finished_at else None,
             "triggered_by": self.triggered_by,
+            "extra_vars": self.extra_vars,
+            "check_mode": self.check_mode,
+            "tags": self.tags,
+            "skip_tags": self.skip_tags,
         }
 
 

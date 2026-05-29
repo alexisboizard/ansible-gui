@@ -18,7 +18,7 @@ from flask import (
 
 from app import db
 from app.auth import authenticate, login_required
-from app.models import Execution, Folder, Host, Playbook, Schedule, Setting
+from app.models import Execution, Folder, Host, LocalUser, Playbook, Schedule, Setting
 
 bp = Blueprint("main", __name__)
 
@@ -486,7 +486,11 @@ def api_executions_create():
     execution = Execution(
         playbook_id=pb.id,
         playbook_name=pb.name,
-        host_pattern=data.get("host_pattern", "all"),
+        host_pattern="all",
+        extra_vars=data.get("extra_vars", ""),
+        check_mode=bool(data.get("check_mode", False)),
+        tags=data.get("tags", ""),
+        skip_tags=data.get("skip_tags", ""),
         status="pending",
         triggered_by=session.get("user", "unknown"),
     )
@@ -616,6 +620,61 @@ def api_settings_save():
 @login_required
 def api_settings_schema():
     return jsonify(SETTINGS_SCHEMA)
+
+
+# ──────────────────── USERS ────────────────────
+
+@bp.route("/api/users", methods=["GET"])
+@login_required
+def api_users():
+    users = LocalUser.query.order_by(LocalUser.id).all()
+    return jsonify([
+        {"id": u.id, "username": u.username, "created_at": u.created_at.isoformat() if u.created_at else None}
+        for u in users
+    ])
+
+
+@bp.route("/api/users", methods=["POST"])
+@login_required
+def api_users_create():
+    data = request.get_json() or {}
+    username = data.get("username", "").strip()
+    password = data.get("password", "")
+    if not username:
+        return jsonify({"error": "Username is required"}), 400
+    if not password:
+        return jsonify({"error": "Password is required"}), 400
+    if LocalUser.query.filter_by(username=username).first():
+        return jsonify({"error": "Username already exists"}), 409
+    user = LocalUser(username=username)
+    user.set_password(password)
+    db.session.add(user)
+    db.session.commit()
+    return jsonify({"id": user.id, "username": user.username, "created_at": user.created_at.isoformat() if user.created_at else None}), 201
+
+
+@bp.route("/api/users/<int:user_id>", methods=["PUT"])
+@login_required
+def api_users_update(user_id):
+    user = LocalUser.query.get_or_404(user_id)
+    data = request.get_json() or {}
+    password = data.get("password", "")
+    if not password:
+        return jsonify({"error": "Password is required"}), 400
+    user.set_password(password)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
+@bp.route("/api/users/<int:user_id>", methods=["DELETE"])
+@login_required
+def api_users_delete(user_id):
+    user = LocalUser.query.get_or_404(user_id)
+    if LocalUser.query.count() <= 1:
+        return jsonify({"error": "Cannot delete the last user"}), 400
+    db.session.delete(user)
+    db.session.commit()
+    return jsonify({"ok": True})
 
 
 @bp.route("/api/settings/test-ldap", methods=["POST"])

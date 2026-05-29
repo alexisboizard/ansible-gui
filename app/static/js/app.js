@@ -55,6 +55,7 @@ function showPage(name) {
   if (name === 'executions') loadExecutions();
   if (name === 'schedules') loadSchedules();
   if (name === 'settings') loadSettings();
+  if (name === 'users') loadUsers();
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
@@ -610,17 +611,21 @@ function openRunModal(pbId) {
   runPlaybookId = pbId;
   const pb = playbooksData.find(p => p.id === pbId);
   document.getElementById('run-playbook-name').textContent = pb ? pb.name : '';
-  document.getElementById('run-host-pattern').value = 'all';
+  document.getElementById('run-extra-vars').value = '';
+  document.getElementById('run-tags').value = '';
+  document.getElementById('run-skip-tags').value = '';
+  document.getElementById('run-check-mode').checked = false;
   showModal('run-modal');
 }
 
 async function executePlaybook() {
   if (!runPlaybookId) return;
-  const hostPattern = document.getElementById('run-host-pattern').value.trim() || 'all';
-
   const res = await api('POST', '/api/executions', {
     playbook_id: runPlaybookId,
-    host_pattern: hostPattern,
+    extra_vars: document.getElementById('run-extra-vars').value.trim(),
+    tags: document.getElementById('run-tags').value.trim(),
+    skip_tags: document.getElementById('run-skip-tags').value.trim(),
+    check_mode: document.getElementById('run-check-mode').checked,
   });
 
   if (res.ok) {
@@ -955,6 +960,97 @@ async function runLdapTest() {
     toast('LDAP test passed', 'success');
   } else {
     toast('LDAP test failed — check steps above', 'error');
+  }
+}
+
+// ── Users ─────────────────────────────────────────────────────────────────────
+
+let usersData = [];
+
+async function loadUsers() {
+  const res = await api('GET', '/api/users');
+  usersData = await res.json();
+  renderUsers();
+}
+
+function renderUsers() {
+  const tbody = document.getElementById('users-tbody');
+  tbody.innerHTML = '';
+
+  if (usersData.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+      <p>No users found.</p></div></td></tr>`;
+    return;
+  }
+
+  for (const u of usersData) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${u.id}</td>
+      <td><strong>${u.username}</strong></td>
+      <td>${fmtDate(u.created_at)}</td>
+      <td>
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-icon btn-sm" title="Change password" onclick="openUserModal(${u.id})">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="btn btn-icon btn-sm" title="Delete" onclick="deleteUser(${u.id})" style="color:var(--danger);border-color:rgba(245,54,92,0.3)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
+          </button>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+function openUserModal(id = null) {
+  const user = id ? usersData.find(u => u.id === id) : null;
+  document.getElementById('user-modal-title').textContent = user ? 'Change Password' : 'New User';
+  document.getElementById('user-id').value = user ? user.id : '';
+  document.getElementById('user-username').value = user ? user.username : '';
+  document.getElementById('user-username').disabled = !!user;
+  document.getElementById('user-username-group').style.display = user ? 'none' : '';
+  document.getElementById('user-password').value = '';
+  document.getElementById('user-password-confirm').value = '';
+  showModal('user-modal');
+}
+
+async function saveUser() {
+  const id = document.getElementById('user-id').value;
+  const password = document.getElementById('user-password').value;
+  const confirm = document.getElementById('user-password-confirm').value;
+
+  if (!password) { toast('Password is required', 'error'); return; }
+  if (password !== confirm) { toast('Passwords do not match', 'error'); return; }
+
+  let res;
+  if (id) {
+    res = await api('PUT', `/api/users/${id}`, { password });
+  } else {
+    const username = document.getElementById('user-username').value.trim();
+    if (!username) { toast('Username is required', 'error'); return; }
+    res = await api('POST', '/api/users', { username, password });
+  }
+
+  if (res.ok) {
+    toast(id ? 'Password updated' : 'User created', 'success');
+    closeModal('user-modal');
+    loadUsers();
+  } else {
+    const err = await res.json().catch(() => ({}));
+    toast(err.error || 'Failed to save user', 'error');
+  }
+}
+
+async function deleteUser(id) {
+  if (!confirm('Delete this user?')) return;
+  const res = await api('DELETE', `/api/users/${id}`);
+  if (res.ok) { toast('User deleted', 'success'); loadUsers(); }
+  else {
+    const err = await res.json().catch(() => ({}));
+    toast(err.error || 'Failed to delete user', 'error');
   }
 }
 

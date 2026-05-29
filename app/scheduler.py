@@ -1,134 +1,127 @@
 from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
-from app import db
-from app.models import Schedule, Execution, Setting
-from app.runner import run_playbook
-from app.notifications import send_schedule_report
-from app.ping import ping_all_hosts
-
-scheduler = BackgroundScheduler()
-
-PING_JOB_ID = "host_ping_checker"
-DEFAULT_PING_INTERVAL = 120  # seconds
+_scheduler = None
 
 
-def execute_scheduled_playbook(app, schedule_id):
-    """Execute a playbook from a schedule and send notification."""
-    import datetime
+def get_scheduler():
+    return _scheduler
+
+
+def setup_scheduler(app):
+    global _scheduler
+    _scheduler = BackgroundScheduler()
 
     with app.app_context():
-        schedule = db.session.get(Schedule, schedule_id)
+        from app.models import Setting
+        interval = int(Setting.get("ping_interval", "300") or 300)
+
+    _scheduler.add_job(
+        func=_ping_job,
+        trigger=IntervalTrigger(seconds=interval),
+        id="ping_all_hosts",
+        replace_existing=True,
+    )
+
+    _scheduler.start()
+
+    import atexit
+    atexit.register(lambda: _scheduler.shutdown(wait=False))
+
+
+def _ping_job():
+    from app import create_app
+    from app.ping import ping_all_hosts
+
+    app = create_app()
+    with app.app_context():
+        ping_all_hosts()
+
+
+def execute_scheduled_playbook(schedule_id):
+    """Run a scheduled playbook execution."""
+    from app import create_app
+    from app.models import Execution, Schedule, db
+    from app.runner import run_playbook
+    from datetime import datetime
+    import threading
+
+    app = create_app()
+    with app.app_context():
+        schedule = Schedule.query.get(schedule_id)
         if not schedule or not schedule.enabled:
             return
 
         execution = Execution(
             playbook_id=schedule.playbook_id,
-            hosts_pattern=schedule.hosts_pattern,
+            playbook_name=schedule.playbook.name,
+            host_pattern=schedule.host_pattern,
             status="pending",
+            triggered_by=f"schedule:{schedule.name}",
         )
         db.session.add(execution)
         db.session.commit()
+        execution_id = execution.id
 
-        run_playbook(app, execution.id)
+        thread = threading.Thread(target=run_playbook, args=(execution_id,), daemon=True)
+        thread.start()
+        thread.join()
 
-        # Reload execution after run and update schedule last run info
-        execution = db.session.get(Execution, execution.id)
-        schedule = db.session.get(Schedule, schedule_id)
-        if schedule:
-            schedule.last_run_at = datetime.datetime.utcnow()
-            schedule.last_run_status = execution.status if execution else "failed"
-            db.session.commit()
-
-        if schedule and schedule.notify_email and execution:
-            send_schedule_report(app, execution, schedule.notify_email)
+        execution = Execution.query.get(execution_id)
+        schedule.last_run_at = datetime.utcnow()
+        schedule.last_run_status = execution.status if execution else "unknown"
+        db.session.commit()
 
 
-def load_schedules(app):
-    """Load all enabled schedules from the database into the scheduler."""
-    with app.app_context():
-        # Remove existing playbook jobs
-        for job in scheduler.get_jobs():
-            if job.id.startswith("schedule_"):
-                job.remove()
+def register_schedule(schedule):
+    """Register or update a schedule in APScheduler."""
+    if _scheduler is None:
+        return
 
-        schedules = Schedule.query.filter_by(enabled=True).all()
-        for s in schedules:
-            add_schedule_job(app, s)
+    from apscheduler.triggers.cron import CronTrigger
 
-
-def add_schedule_job(app, schedule):
-    """Add a single schedule job to the scheduler."""
     job_id = f"schedule_{schedule.id}"
 
-    # Remove existing job if any
-    existing = scheduler.get_job(job_id)
-    if existing:
-        existing.remove()
+    if _scheduler.get_job(job_id):
+        _scheduler.remove_job(job_id)
 
     if not schedule.enabled:
         return
 
-    parts = schedule.cron_expression.split()
-    if len(parts) != 5:
+    parts = schedule.cron_expr.split()
+    if len(parts) == 5:
+        minute, hour, day, month, day_of_week = parts
+        trigger = CronTrigger(
+            minute=minute,
+            hour=hour,
+            day=day,
+            month=month,
+            day_of_week=day_of_week,
+        )
+    else:
         return
 
-    trigger = CronTrigger(
-        minute=parts[0],
-        hour=parts[1],
-        day=parts[2],
-        month=parts[3],
-        day_of_week=parts[4],
-    )
-
-    scheduler.add_job(
-        execute_scheduled_playbook,
+    _scheduler.add_job(
+        func=execute_scheduled_playbook,
         trigger=trigger,
+        args=[schedule.id],
         id=job_id,
-        args=[app, schedule.id],
         replace_existing=True,
     )
 
 
-def remove_schedule_job(schedule_id):
-    """Remove a schedule job from the scheduler."""
+def unregister_schedule(schedule_id):
+    if _scheduler is None:
+        return
     job_id = f"schedule_{schedule_id}"
-    existing = scheduler.get_job(job_id)
-    if existing:
-        existing.remove()
+    if _scheduler.get_job(job_id):
+        _scheduler.remove_job(job_id)
 
 
-def get_next_run_time(schedule_id):
-    """Get the next scheduled run time for a given schedule."""
-    job_id = f"schedule_{schedule_id}"
-    job = scheduler.get_job(job_id)
+def get_next_run(schedule_id):
+    if _scheduler is None:
+        return None
+    job = _scheduler.get_job(f"schedule_{schedule_id}")
     if job and job.next_run_time:
         return job.next_run_time.isoformat()
     return None
-
-
-def setup_ping_job(app):
-    """Register or update the periodic host ping job."""
-    with app.app_context():
-        interval = int(Setting.get("ping_interval", str(DEFAULT_PING_INTERVAL)) or DEFAULT_PING_INTERVAL)
-
-    existing = scheduler.get_job(PING_JOB_ID)
-    if existing:
-        existing.remove()
-
-    scheduler.add_job(
-        ping_all_hosts,
-        trigger=IntervalTrigger(seconds=interval),
-        id=PING_JOB_ID,
-        args=[app],
-        replace_existing=True,
-    )
-
-
-def init_scheduler(app):
-    """Initialize and start the APScheduler."""
-    if not scheduler.running:
-        scheduler.start()
-    load_schedules(app)
-    setup_ping_job(app)

@@ -1,183 +1,76 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Connexion - Ansible GUI</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-    <style>
-        :root {
-            --bg-color: #0d1117;
-            --card-bg: #161b22;
-            --border-color: #30363d;
-            --text-primary: #e6edf3;
-            --text-muted: #8b949e;
-        }
-
-        body {
-            background-color: var(--bg-color);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-        }
-
-        .login-container {
-            width: 100%;
-            max-width: 400px;
-            padding: 20px;
-        }
-
-        .login-header {
-            text-align: center;
-            margin-bottom: 32px;
-        }
-
-        .login-header .logo {
-            width: 64px;
-            height: 64px;
-            background-color: #238636;
-            border-radius: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 0 auto 20px;
-        }
-
-        .login-header .logo i {
-            font-size: 2rem;
-            color: #fff;
-        }
-
-        .login-header h1 {
-            color: var(--text-primary);
-            font-size: 1.75rem;
-            font-weight: 600;
-            margin: 0 0 8px 0;
-        }
-
-        .login-header p {
-            color: var(--text-muted);
-            margin: 0;
-        }
-
-        .login-card {
-            background-color: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 24px;
-        }
-
-        .form-label {
-            color: var(--text-primary);
-            font-weight: 500;
-            margin-bottom: 8px;
-        }
-
-        .form-control {
-            background-color: #0d1117;
-            border: 1px solid var(--border-color);
-            color: var(--text-primary);
-            border-radius: 8px;
-            padding: 12px 14px;
-        }
-
-        .form-control:focus {
-            background-color: #0d1117;
-            border-color: #58a6ff;
-            color: var(--text-primary);
-            box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.2);
-        }
-
-        .form-control::placeholder {
-            color: var(--text-muted);
-        }
-
-        .input-group-text {
-            background-color: #21262d;
-            border: 1px solid var(--border-color);
-            color: var(--text-muted);
-            border-radius: 8px 0 0 8px;
-        }
-
-        .input-group .form-control {
-            border-radius: 0 8px 8px 0;
-        }
-
-        .btn-primary {
-            background-color: #238636;
-            border-color: #238636;
-            padding: 12px 20px;
-            font-weight: 500;
-            border-radius: 8px;
-        }
-
-        .btn-primary:hover {
-            background-color: #2ea043;
-            border-color: #2ea043;
-        }
-
-        .alert-danger {
-            background-color: rgba(248, 81, 73, 0.1);
-            border: 1px solid #f85149;
-            color: #f85149;
-            border-radius: 8px;
-        }
-
-        .footer-text {
-            text-align: center;
-            margin-top: 24px;
-            color: var(--text-muted);
-            font-size: 0.85rem;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — Ansible GUI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script>
+    (function() {
+      const t = localStorage.getItem('theme');
+      const isDark = t ? t === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.classList.add(isDark ? 'dark-theme' : 'light-theme');
+    })();
+  </script>
 </head>
 <body>
-    <div class="login-container">
-        <div class="login-header">
-            <div class="logo">
-                <i class="bi bi-terminal-fill"></i>
-            </div>
-            <h1>Ansible GUI</h1>
-            <p>Connectez-vous pour continuer</p>
-        </div>
-
-        <div class="login-card">
-            {% if error %}
-            <div class="alert alert-danger mb-4" role="alert">
-                <i class="bi bi-exclamation-triangle"></i> {{ error }}
-            </div>
-            {% endif %}
-
-            <form method="POST" action="{{ url_for('main.login') }}">
-                <div class="mb-3">
-                    <label for="username" class="form-label">Identifiant</label>
-                    <div class="input-group">
-                        <span class="input-group-text"><i class="bi bi-person"></i></span>
-                        <input type="text" class="form-control" id="username" name="username"
-                               placeholder="prenom.nom" required autofocus
-                               value="{{ request.form.get('username', '') }}">
-                    </div>
-                </div>
-                <div class="mb-4">
-                    <label for="password" class="form-label">Mot de passe</label>
-                    <div class="input-group">
-                        <span class="input-group-text"><i class="bi bi-lock"></i></span>
-                        <input type="password" class="form-control" id="password" name="password"
-                               placeholder="Mot de passe" required>
-                    </div>
-                </div>
-                <button type="submit" class="btn btn-primary w-100">
-                    <i class="bi bi-box-arrow-in-right"></i> Se connecter
-                </button>
-            </form>
-        </div>
-
-        <p class="footer-text">
-            Connexion locale ou Active Directory
-        </p>
+<div class="login-page">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-logo-icon">
+        <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M20 6L34 28H6L20 6Z" fill="currentColor" fill-opacity="0.8"/>
+          <circle cx="20" cy="30" r="5" fill="currentColor"/>
+        </svg>
+      </div>
+      <h1 class="login-title">AnsibleGUI</h1>
+      <p class="login-subtitle">Sign in to continue</p>
     </div>
+
+    <div id="login-error" style="display:none;background:rgba(245,54,92,0.1);border:1px solid rgba(245,54,92,0.3);color:#f5365c;padding:10px 14px;border-radius:7px;font-size:13px;margin-bottom:16px"></div>
+
+    <div class="form-group">
+      <label class="form-label">Username</label>
+      <input type="text" class="form-control" id="username" placeholder="admin" autofocus>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Password</label>
+      <input type="password" class="form-control" id="password" placeholder="••••••••"
+        onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+
+    <button class="btn btn-primary" style="width:100%;justify-content:center;padding:10px" onclick="doLogin()">
+      Sign In
+    </button>
+  </div>
+</div>
+
+<script>
+  async function doLogin() {
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    const errEl = document.getElementById('login-error');
+
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      if (res.ok) {
+        location.href = '/';
+      } else {
+        const data = await res.json();
+        errEl.textContent = data.error || 'Invalid credentials';
+        errEl.style.display = 'block';
+      }
+    } catch(e) {
+      errEl.textContent = 'Connection error. Please try again.';
+      errEl.style.display = 'block';
+    }
+  }
+</script>
 </body>
 </html>

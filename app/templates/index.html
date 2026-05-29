@@ -1,685 +1,512 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ansible GUI</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/theme/dracula.min.css">
-    <link rel="stylesheet" href="/static/css/style.css">
-    <script>
-        // Apply theme immediately to avoid flash
-        (function() {
-            var saved = localStorage.getItem("theme");
-            var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-            var theme = saved || (prefersDark ? "dark" : "light");
-            document.documentElement.className = theme + "-theme";
-        })();
-    </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ansible GUI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script>
+    // Apply theme before render to avoid flash
+    (function() {
+      const t = localStorage.getItem('theme');
+      const isDark = t ? t === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.classList.add(isDark ? 'dark-theme' : 'light-theme');
+    })();
+  </script>
 </head>
 <body>
+<div class="app-layout">
 
-<!-- SIDEBAR -->
-<aside class="sidebar">
-    <div class="sidebar-header">
-        <i class="bi bi-terminal-fill"></i>
-        <span>Ansible GUI</span>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="40" height="40" rx="10" fill="#6c63ff" fill-opacity="0.15"/>
+        <path d="M20 8L32 26H8L20 8Z" fill="#6c63ff" fill-opacity="0.8"/>
+        <circle cx="20" cy="28" r="4" fill="#6c63ff"/>
+      </svg>
+      <span class="sidebar-logo-text">Ansible<span>GUI</span></span>
     </div>
 
     <nav class="sidebar-nav">
-        <a href="#" class="nav-item active" data-tab="dashboard">
-            <i class="bi bi-grid-1x2-fill"></i>
-            <span>Dashboard</span>
-        </a>
-        <a href="#" class="nav-item" data-tab="inventory">
-            <i class="bi bi-hdd-network-fill"></i>
-            <span>Inventaire</span>
-        </a>
-        <a href="#" class="nav-item" data-tab="playbooks">
-            <i class="bi bi-file-earmark-code-fill"></i>
-            <span>Playbooks</span>
-        </a>
-        <a href="#" class="nav-item" data-tab="executions">
-            <i class="bi bi-play-circle-fill"></i>
-            <span>Executions</span>
-        </a>
-        <a href="#" class="nav-item" data-tab="schedules">
-            <i class="bi bi-clock-fill"></i>
-            <span>Planification</span>
-        </a>
-        <a href="#" class="nav-item" data-tab="settings">
-            <i class="bi bi-gear-fill"></i>
-            <span>Parametres</span>
-        </a>
+      <div class="nav-section-label">Overview</div>
+      <button class="sidebar-link" data-page="dashboard" onclick="showPage('dashboard')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        <span>Dashboard</span>
+      </button>
+
+      <div class="nav-section-label">Manage</div>
+      <button class="sidebar-link" data-page="inventory" onclick="showPage('inventory')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        <span>Inventory</span>
+      </button>
+      <button class="sidebar-link" data-page="playbooks" onclick="showPage('playbooks')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        <span>Playbooks</span>
+      </button>
+
+      <div class="nav-section-label">Automation</div>
+      <button class="sidebar-link" data-page="executions" onclick="showPage('executions')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span>Executions</span>
+      </button>
+      <button class="sidebar-link" data-page="schedules" onclick="showPage('schedules')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span>Schedules</span>
+      </button>
+
+      <div class="nav-section-label">System</div>
+      <button class="sidebar-link" data-page="settings" onclick="showPage('settings')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M19.07 19.07l-1.41-1.41M4.93 19.07l1.41-1.41M1 12h2M21 12h2M12 1v2M12 21v2"/></svg>
+        <span>Settings</span>
+      </button>
     </nav>
 
     <div class="sidebar-footer">
-        <div class="user-info">
-            <i class="bi bi-person-circle"></i>
-            <span>{{ user }}</span>
+      <button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/></svg>
+      </button>
+      <form action="/api/logout" method="post" style="flex:1">
+        <button type="submit" class="btn btn-secondary" style="width:100%;justify-content:center;font-size:12px"
+          onclick="event.preventDefault();api('POST','/api/logout').then(()=>location.href='/login')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Logout
+        </button>
+      </form>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Top Bar -->
+    <div class="topbar">
+      <span class="topbar-title" id="topbar-title">Dashboard</span>
+      <div class="topbar-actions">
+        <div class="user-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          {{ user }}
         </div>
-        <div class="d-flex align-items-center gap-2">
-            <button class="theme-toggle-btn" onclick="toggleTheme()" title="Changer de theme">
-                <i class="bi bi-sun-fill" id="theme-icon"></i>
+      </div>
+    </div>
+
+    <!-- ── Dashboard Page ── -->
+    <section class="page active" id="page-dashboard">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon purple">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          </div>
+          <div>
+            <div class="stat-value" id="stat-hosts">—</div>
+            <div class="stat-label">Total Hosts</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon green">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div>
+            <div class="stat-value" id="stat-reachable">—</div>
+            <div class="stat-label">Reachable Hosts</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon blue">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          </div>
+          <div>
+            <div class="stat-value" id="stat-playbooks">—</div>
+            <div class="stat-label">Playbooks</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon orange">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <div>
+            <div class="stat-value" id="stat-executions">—</div>
+            <div class="stat-label">Total Executions</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Recent Executions</h3>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Playbook</th><th>Status</th><th>Triggered By</th><th>Started</th>
+              </tr>
+            </thead>
+            <tbody id="recent-executions-tbody">
+              <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:24px">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Inventory Page ── -->
+    <section class="page" id="page-inventory">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Hosts</h3>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <div class="search-bar">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input class="form-control" id="host-search" placeholder="Search hosts..." oninput="loadHosts(this.value)">
+            </div>
+            <button class="btn btn-secondary" onclick="pingAllHosts()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              Ping All
             </button>
-            <a href="/logout" class="logout-btn" title="Deconnexion">
-                <i class="bi bi-box-arrow-right"></i>
-            </a>
-        </div>
-    </div>
-</aside>
-
-<!-- MAIN CONTENT -->
-<main class="main-content">
-
-    <!-- DASHBOARD TAB -->
-    <div id="tab-dashboard" class="tab-content-section">
-        <div class="page-header">
-            <h2>Dashboard</h2>
-            <p class="text-muted">Vue d'ensemble de votre infrastructure</p>
-        </div>
-
-        <div class="row g-4 mb-4">
-            <div class="col-md-3">
-                <div class="stat-card">
-                    <div class="stat-icon bg-primary">
-                        <i class="bi bi-hdd-network"></i>
-                    </div>
-                    <div class="stat-info">
-                        <span class="stat-value" id="stat-hosts">-</span>
-                        <span class="stat-label">Hotes</span>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="stat-card">
-                    <div class="stat-icon bg-success">
-                        <i class="bi bi-check-circle"></i>
-                    </div>
-                    <div class="stat-info">
-                        <span class="stat-value" id="stat-hosts-up">-</span>
-                        <span class="stat-label">En ligne</span>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="stat-card">
-                    <div class="stat-icon bg-danger">
-                        <i class="bi bi-x-circle"></i>
-                    </div>
-                    <div class="stat-info">
-                        <span class="stat-value" id="stat-hosts-down">-</span>
-                        <span class="stat-label">Hors ligne</span>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="stat-card">
-                    <div class="stat-icon bg-info">
-                        <i class="bi bi-file-earmark-code"></i>
-                    </div>
-                    <div class="stat-info">
-                        <span class="stat-value" id="stat-playbooks">-</span>
-                        <span class="stat-label">Playbooks</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row g-4">
-            <div class="col-lg-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h5><i class="bi bi-clock-history"></i> Executions recentes</h5>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-hover mb-0">
-                                <thead>
-                                    <tr>
-                                        <th>Playbook</th>
-                                        <th>Statut</th>
-                                        <th>Date</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="dashboard-recent-executions"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h5><i class="bi bi-calendar-event"></i> Prochaines planifications</h5>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-hover mb-0">
-                                <thead>
-                                    <tr>
-                                        <th>Playbook</th>
-                                        <th>Prochaine execution</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="dashboard-upcoming-schedules"></tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- INVENTORY TAB -->
-    <div id="tab-inventory" class="tab-content-section d-none">
-        <div class="page-header">
-            <div>
-                <h2>Inventaire</h2>
-                <p class="text-muted">Gestion de vos serveurs</p>
-            </div>
-            <div class="d-flex gap-2">
-                <div class="search-box">
-                    <i class="bi bi-search"></i>
-                    <input type="text" id="hosts-search" placeholder="Rechercher..." oninput="filterHosts()">
-                </div>
-                <button class="btn btn-outline-light" onclick="triggerPing()" title="Verifier la connectivite">
-                    <i class="bi bi-broadcast"></i>
-                </button>
-                <div class="dropdown">
-                    <button class="btn btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                        <i class="bi bi-file-earmark-arrow-up"></i>
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end dropdown-menu-dark">
-                        <li><a class="dropdown-item" href="#" onclick="showImportModal()"><i class="bi bi-upload"></i> Importer CSV</a></li>
-                        <li><a class="dropdown-item" href="/api/hosts/export"><i class="bi bi-download"></i> Exporter CSV</a></li>
-                    </ul>
-                </div>
-                <button class="btn btn-primary" onclick="showHostModal()">
-                    <i class="bi bi-plus-lg"></i> Ajouter
-                </button>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead>
-                            <tr>
-                                <th style="width:50px">Etat</th>
-                                <th>Hostname</th>
-                                <th>Adresse IP</th>
-                                <th>Port</th>
-                                <th>Utilisateur</th>
-                                <th>Groupes</th>
-                                <th>Description</th>
-                                <th style="width:100px">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="hosts-table"></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-        <div id="hosts-empty" class="empty-state d-none">
-            <i class="bi bi-inbox"></i>
-            <h4>Aucun hote configure</h4>
-            <p>Ajoutez votre premier serveur pour commencer</p>
-            <button class="btn btn-primary" onclick="showHostModal()">
-                <i class="bi bi-plus-lg"></i> Ajouter un hote
+            <button class="btn btn-secondary" onclick="exportHosts()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Export CSV
             </button>
-        </div>
-    </div>
-
-    <!-- PLAYBOOKS TAB -->
-    <div id="tab-playbooks" class="tab-content-section d-none">
-        <div class="page-header">
-            <div>
-                <h2>Playbooks</h2>
-                <p class="text-muted">Vos scripts Ansible</p>
-            </div>
-            <button class="btn btn-primary" onclick="showPlaybookModal()">
-                <i class="bi bi-plus-lg"></i> Nouveau playbook
+            <button class="btn btn-secondary" onclick="openImportModal()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Import CSV
             </button>
-        </div>
-        <div class="row g-4" id="playbooks-list"></div>
-        <div id="playbooks-empty" class="empty-state d-none">
-            <i class="bi bi-file-earmark-plus"></i>
-            <h4>Aucun playbook</h4>
-            <p>Creez votre premier playbook Ansible</p>
-            <button class="btn btn-primary" onclick="showPlaybookModal()">
-                <i class="bi bi-plus-lg"></i> Nouveau playbook
+            <button class="btn btn-primary" onclick="openHostModal()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add Host
             </button>
+          </div>
         </div>
-    </div>
-
-    <!-- EXECUTIONS TAB -->
-    <div id="tab-executions" class="tab-content-section d-none">
-        <div class="page-header">
-            <div>
-                <h2>Executions</h2>
-                <p class="text-muted">Historique des executions</p>
-            </div>
-            <div class="d-flex gap-2">
-                <button class="btn btn-outline-light" onclick="loadExecutions()">
-                    <i class="bi bi-arrow-clockwise"></i> Rafraichir
-                </button>
-                <div class="dropdown">
-                    <button class="btn btn-outline-danger dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                        <i class="bi bi-trash"></i> Purger
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end dropdown-menu-dark">
-                        <li><a class="dropdown-item" href="#" onclick="purgeExecutions('completed')">Terminees</a></li>
-                        <li><a class="dropdown-item" href="#" onclick="purgeExecutions('7days')">Plus de 7 jours</a></li>
-                        <li><a class="dropdown-item" href="#" onclick="purgeExecutions('30days')">Plus de 30 jours</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item text-danger" href="#" onclick="purgeExecutions('all')">Tout supprimer</a></li>
-                    </ul>
-                </div>
-            </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:80px">Status</th>
+                <th>Name</th>
+                <th>Address</th>
+                <th>OS</th>
+                <th>Groups</th>
+                <th>Last Ping</th>
+                <th style="width:100px">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="hosts-tbody">
+              <tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:24px">Loading...</td></tr>
+            </tbody>
+          </table>
         </div>
+      </div>
+    </section>
 
-        <div class="card">
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Playbook</th>
-                                <th>Hotes</th>
-                                <th>Statut</th>
-                                <th>Debut</th>
-                                <th>Fin</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="executions-table"></tbody>
-                    </table>
-                </div>
-            </div>
+    <!-- ── Playbooks Page ── -->
+    <section class="page" id="page-playbooks">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+        <button class="btn btn-primary" onclick="openPlaybookModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New Playbook
+        </button>
+      </div>
+      <div id="playbooks-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
+        <div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:24px">Loading...</div>
+      </div>
+    </section>
+
+    <!-- ── Executions Page ── -->
+    <section class="page" id="page-executions">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Execution History</h3>
+          <button class="btn btn-danger btn-sm" onclick="purgeExecutions()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
+            Purge All
+          </button>
         </div>
-    </div>
-
-    <!-- SCHEDULES TAB -->
-    <div id="tab-schedules" class="tab-content-section d-none">
-        <div class="page-header">
-            <div>
-                <h2>Planification</h2>
-                <p class="text-muted">Executions planifiees</p>
-            </div>
-            <button class="btn btn-primary" onclick="showScheduleModal()">
-                <i class="bi bi-plus-lg"></i> Nouvelle planification
-            </button>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:60px">#</th>
+                <th>Playbook</th>
+                <th>Hosts</th>
+                <th>Status</th>
+                <th>Started</th>
+                <th style="width:80px">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="executions-tbody">
+              <tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:24px">Loading...</td></tr>
+            </tbody>
+          </table>
         </div>
+      </div>
+    </section>
 
-        <div class="card">
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead>
-                            <tr>
-                                <th>Playbook</th>
-                                <th>Cron</th>
-                                <th>Hotes</th>
-                                <th>Derniere execution</th>
-                                <th>Prochaine execution</th>
-                                <th>Email</th>
-                                <th>Actif</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="schedules-table"></tbody>
-                    </table>
-                </div>
-            </div>
+    <!-- ── Schedules Page ── -->
+    <section class="page" id="page-schedules">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Schedules</h3>
+          <button class="btn btn-primary" onclick="openScheduleModal()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Schedule
+          </button>
         </div>
-    </div>
-
-    <!-- SETTINGS TAB -->
-    <div id="tab-settings" class="tab-content-section d-none">
-        <div class="page-header">
-            <h2>Parametres</h2>
-            <p class="text-muted">Configuration de l'application</p>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Playbook</th>
+                <th>Cron</th>
+                <th>Hosts</th>
+                <th>Last Run</th>
+                <th>Next Run</th>
+                <th style="width:80px">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="schedules-tbody">
+              <tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:24px">Loading...</td></tr>
+            </tbody>
+          </table>
         </div>
+      </div>
+    </section>
 
-        <div class="row g-4">
-            <!-- SSH -->
-            <div class="col-lg-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h5><i class="bi bi-key"></i> Authentification SSH</h5>
-                    </div>
-                    <div class="card-body" id="settings-ssh-fields"></div>
-                    <div class="card-footer">
-                        <button class="btn btn-primary" onclick="saveSettings('ssh')">
-                            <i class="bi bi-check-lg"></i> Enregistrer
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- LDAP / Active Directory -->
-            <div class="col-lg-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h5><i class="bi bi-shield-lock"></i> Active Directory / LDAP</h5>
-                    </div>
-                    <div class="card-body" id="settings-ldap-fields"></div>
-                    <div class="card-footer d-flex gap-2">
-                        <button class="btn btn-primary" onclick="saveSettings('ldap')">
-                            <i class="bi bi-check-lg"></i> Enregistrer
-                        </button>
-                        <button class="btn btn-outline-light" onclick="testLdap()">
-                            <i class="bi bi-plug"></i> Tester
-                        </button>
-                        <span id="ldap-test-result" class="align-self-center ms-2"></span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- SMTP -->
-            <div class="col-lg-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h5><i class="bi bi-envelope"></i> Serveur SMTP</h5>
-                    </div>
-                    <div class="card-body" id="settings-smtp-fields"></div>
-                    <div class="card-footer d-flex gap-2">
-                        <button class="btn btn-primary" onclick="saveSettings('smtp')">
-                            <i class="bi bi-check-lg"></i> Enregistrer
-                        </button>
-                        <button class="btn btn-outline-light" onclick="testSmtp()">
-                            <i class="bi bi-plug"></i> Tester
-                        </button>
-                        <span id="smtp-test-result" class="align-self-center ms-2"></span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- General -->
-            <div class="col-lg-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h5><i class="bi bi-sliders"></i> General</h5>
-                    </div>
-                    <div class="card-body" id="settings-general-fields"></div>
-                    <div class="card-footer">
-                        <button class="btn btn-primary" onclick="saveSettings('general')">
-                            <i class="bi bi-check-lg"></i> Enregistrer
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Admin password -->
-            <div class="col-lg-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h5><i class="bi bi-person-lock"></i> Compte admin local</h5>
-                    </div>
-                    <div class="card-body">
-                        <p class="text-muted mb-3">
-                            Identifiant par defaut : <code>admin</code> / <code>admin</code>
-                        </p>
-                        <div class="mb-3">
-                            <label class="form-label">Mot de passe actuel</label>
-                            <input type="password" class="form-control" id="admin-current-password">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Nouveau mot de passe</label>
-                            <input type="password" class="form-control" id="admin-new-password" placeholder="6 caracteres minimum">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Confirmer</label>
-                            <input type="password" class="form-control" id="admin-confirm-password">
-                        </div>
-                    </div>
-                    <div class="card-footer d-flex gap-2">
-                        <button class="btn btn-warning" onclick="changeAdminPassword()">
-                            <i class="bi bi-key"></i> Changer
-                        </button>
-                        <span id="admin-password-result" class="align-self-center ms-2"></span>
-                    </div>
-                </div>
-            </div>
+    <!-- ── Settings Page ── -->
+    <section class="page" id="page-settings">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Settings</h3>
+          <button class="btn btn-primary" onclick="saveSettings()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            Save Settings
+          </button>
         </div>
-    </div>
-</main>
-
-<!-- IMPORT CSV MODAL -->
-<div class="modal fade" id="importModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-upload"></i> Importer des hotes</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p class="text-muted mb-3">
-                    Selectionnez un fichier CSV avec les colonnes suivantes :
-                </p>
-                <div class="mb-3 p-3 rounded" style="background-color: var(--sidebar-bg);">
-                    <code class="text-info">hostname,ip_address,port,username,group_name,description,variables</code>
-                </div>
-                <p class="text-muted small mb-3">
-                    Seuls <strong>hostname</strong> et <strong>ip_address</strong> sont obligatoires.
-                    Les autres colonnes sont optionnelles.
-                </p>
-                <div class="mb-3">
-                    <label class="form-label">Fichier CSV</label>
-                    <input type="file" class="form-control" id="import-file" accept=".csv">
-                </div>
-                <div id="import-result" class="mt-3"></div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Fermer</button>
-                <button type="button" class="btn btn-primary" onclick="importHosts()">
-                    <i class="bi bi-upload"></i> Importer
-                </button>
-            </div>
+        <div class="card-body">
+          <div class="settings-grid">
+            <div class="settings-nav" id="settings-nav"></div>
+            <div id="settings-content"></div>
+          </div>
         </div>
-    </div>
+      </div>
+    </section>
+  </main>
 </div>
 
-<!-- HOST MODAL -->
-<div class="modal fade" id="hostModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="hostModalTitle">Ajouter un hote</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="host-id">
+<!-- ── Modals ── -->
 
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <label class="form-label">Hostname <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="host-hostname" placeholder="web-server-01">
-                        <div class="form-text">Nom unique du serveur</div>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Adresse IP <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="host-ip" placeholder="192.168.1.10">
-                        <div class="form-text">Adresse IPv4 ou hostname DNS</div>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Port SSH</label>
-                        <input type="number" class="form-control" id="host-port" value="22">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Utilisateur SSH</label>
-                        <input type="text" class="form-control" id="host-username" value="ansible">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Groupes</label>
-                        <input type="text" class="form-control" id="host-group" value="all" placeholder="web,production">
-                        <div class="form-text">Separes par des virgules</div>
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label">Description</label>
-                        <input type="text" class="form-control" id="host-description" placeholder="Serveur web principal">
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label">Variables Ansible (JSON)</label>
-                        <textarea class="form-control font-monospace" id="host-variables" rows="3" placeholder='{"http_port": 80}'>{}</textarea>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Annuler</button>
-                <button type="button" class="btn btn-primary" onclick="saveHost()">
-                    <i class="bi bi-check-lg"></i> Enregistrer
-                </button>
-            </div>
-        </div>
+<!-- Host Modal -->
+<div class="modal-overlay" id="host-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title" id="host-modal-title">Add Host</h3>
+      <button class="modal-close" onclick="closeModal('host-modal')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
     </div>
+    <div class="modal-body">
+      <input type="hidden" id="host-id">
+      <div class="form-group">
+        <label class="form-label">Name</label>
+        <input type="text" class="form-control" id="host-name" placeholder="web-server-01">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Address (IP or hostname)</label>
+        <input type="text" class="form-control" id="host-address" placeholder="192.168.1.10">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Groups (comma-separated)</label>
+        <input type="text" class="form-control" id="host-groups" placeholder="web, production">
+      </div>
+      <div class="form-group">
+        <label class="form-label">OS Type</label>
+        <select class="form-control" id="host-os">
+          <option value="linux">Linux</option>
+          <option value="windows">Windows</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Variables (JSON)</label>
+        <textarea class="form-control" id="host-vars" rows="5" placeholder='{"ansible_user": "admin"}'></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('host-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveHost()">Save Host</button>
+    </div>
+  </div>
 </div>
 
-<!-- PLAYBOOK MODAL -->
-<div class="modal fade" id="playbookModal" tabindex="-1">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="playbookModalTitle">Nouveau playbook</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="playbook-id">
-                <div class="row mb-3">
-                    <div class="col-md-6">
-                        <label class="form-label">Nom <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="playbook-name" placeholder="install-nginx">
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Description</label>
-                        <input type="text" class="form-control" id="playbook-description" placeholder="Installe et configure Nginx">
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Contenu YAML <span class="text-danger">*</span></label>
-                    <textarea class="form-control" id="playbook-content" rows="20"></textarea>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Annuler</button>
-                <button type="button" class="btn btn-primary" onclick="savePlaybook()">
-                    <i class="bi bi-check-lg"></i> Enregistrer
-                </button>
-            </div>
-        </div>
+<!-- Import Modal -->
+<div class="modal-overlay" id="import-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title">Import Hosts from CSV</h3>
+      <button class="modal-close" onclick="closeModal('import-modal')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
     </div>
+    <div class="modal-body">
+      <p style="color:var(--text-secondary);font-size:13px;margin:0 0 16px">
+        CSV format: <code style="background:var(--bg-input);padding:2px 6px;border-radius:4px">name,address,groups,os_type,variables</code>
+      </p>
+      <div class="form-group">
+        <label class="form-label">CSV File</label>
+        <input type="file" class="form-control" id="import-file" accept=".csv">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('import-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="importHosts()">Import</button>
+    </div>
+  </div>
 </div>
 
-<!-- RUN MODAL -->
-<div class="modal fade" id="runModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Executer un playbook</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="run-playbook-id">
-                <p>Playbook : <strong id="run-playbook-name"></strong></p>
-                <div class="mb-3">
-                    <label class="form-label">Pattern d'hotes</label>
-                    <input type="text" class="form-control" id="run-hosts" value="all" placeholder="all, webservers, db-*">
-                    <div class="form-text">Groupes ou hostnames separes par des virgules</div>
-                </div>
-                <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="run-notify">
-                    <label class="form-check-label" for="run-notify">Notifier par email</label>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Annuler</button>
-                <button type="button" class="btn btn-success" onclick="executePlaybook()">
-                    <i class="bi bi-play-fill"></i> Executer
-                </button>
-            </div>
-        </div>
+<!-- Playbook Modal -->
+<div class="modal-overlay" id="pb-modal">
+  <div class="modal-box modal-xl">
+    <div class="modal-header">
+      <h3 class="modal-title" id="pb-modal-title">New Playbook</h3>
+      <button class="modal-close" onclick="closeModal('pb-modal')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
     </div>
+    <div class="modal-body">
+      <input type="hidden" id="pb-id">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Name</label>
+          <input type="text" class="form-control" id="pb-name" placeholder="deploy-app">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Description</label>
+          <input type="text" class="form-control" id="pb-description" placeholder="Short description">
+        </div>
+      </div>
+      <div class="form-group" style="margin:0">
+        <label class="form-label">Content (YAML)</label>
+        <textarea id="pb-content"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('pb-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="savePlaybook()">Save Playbook</button>
+    </div>
+  </div>
 </div>
 
-<!-- OUTPUT MODAL -->
-<div class="modal fade" id="outputModal" tabindex="-1">
-    <div class="modal-dialog modal-xl">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Sortie d'execution</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <pre id="execution-output"></pre>
-            </div>
-        </div>
+<!-- Run Modal -->
+<div class="modal-overlay" id="run-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title">Run Playbook</h3>
+      <button class="modal-close" onclick="closeModal('run-modal')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
     </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text-secondary)">
+        Running: <strong id="run-playbook-name"></strong>
+      </p>
+      <div class="form-group">
+        <label class="form-label">Host Pattern</label>
+        <input type="text" class="form-control" id="run-host-pattern" value="all" placeholder="all">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">
+          Use <code>all</code> for all hosts, a group name, hostname, or comma-separated list
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('run-modal')">Cancel</button>
+      <button class="btn btn-success" onclick="executePlaybook()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Run Now
+      </button>
+    </div>
+  </div>
 </div>
 
-<!-- SCHEDULE MODAL -->
-<div class="modal fade" id="scheduleModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="scheduleModalTitle">Nouvelle planification</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <input type="hidden" id="schedule-id">
-                <div class="mb-3">
-                    <label class="form-label">Playbook <span class="text-danger">*</span></label>
-                    <select class="form-select" id="schedule-playbook"></select>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Expression Cron <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control font-monospace" id="schedule-cron" placeholder="0 2 * * *">
-                    <div class="form-text">Format : min heure jour mois jour_semaine</div>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Pattern d'hotes</label>
-                    <input type="text" class="form-control" id="schedule-hosts" value="all">
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Email de notification</label>
-                    <input type="email" class="form-control" id="schedule-email" placeholder="admin@example.com">
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">Description</label>
-                    <input type="text" class="form-control" id="schedule-description">
-                </div>
-                <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="schedule-enabled" checked>
-                    <label class="form-check-label" for="schedule-enabled">Activer</label>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Annuler</button>
-                <button type="button" class="btn btn-primary" onclick="saveSchedule()">
-                    <i class="bi bi-check-lg"></i> Enregistrer
-                </button>
-            </div>
-        </div>
+<!-- Output Modal -->
+<div class="modal-overlay" id="output-modal">
+  <div class="modal-box modal-xl">
+    <div class="modal-header">
+      <div style="display:flex;align-items:center;gap:10px">
+        <h3 class="modal-title">Execution Output <span id="output-exec-id" style="color:var(--text-muted)"></span></h3>
+        <div id="output-status"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal('output-modal')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
     </div>
+    <div class="modal-body">
+      <pre class="output-terminal" id="output-content"></pre>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('output-modal')">Close</button>
+    </div>
+  </div>
 </div>
 
-<!-- TOAST -->
-<div class="position-fixed bottom-0 end-0 p-3" style="z-index:11">
-    <div id="toast" class="toast align-items-center border-0" role="alert">
-        <div class="d-flex">
-            <div class="toast-body" id="toast-body"></div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-        </div>
+<!-- Schedule Modal -->
+<div class="modal-overlay" id="sched-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3 class="modal-title" id="sched-modal-title">New Schedule</h3>
+      <button class="modal-close" onclick="closeModal('sched-modal')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
     </div>
+    <div class="modal-body">
+      <input type="hidden" id="sched-id">
+      <div class="form-group">
+        <label class="form-label">Name</label>
+        <input type="text" class="form-control" id="sched-name" placeholder="Nightly deploy">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Playbook</label>
+        <select class="form-control" id="sched-playbook"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Cron Expression</label>
+        <input type="text" class="form-control" id="sched-cron" placeholder="0 2 * * *">
+        <div class="cron-presets">
+          <button class="cron-preset" onclick="setCronPreset('0 * * * *')">Hourly</button>
+          <button class="cron-preset" onclick="setCronPreset('0 2 * * *')">Daily 2am</button>
+          <button class="cron-preset" onclick="setCronPreset('0 2 * * 0')">Weekly Sun</button>
+          <button class="cron-preset" onclick="setCronPreset('0 2 1 * *')">Monthly</button>
+          <button class="cron-preset" onclick="setCronPreset('*/15 * * * *')">Every 15m</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Host Pattern</label>
+        <input type="text" class="form-control" id="sched-host-pattern" value="all">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Enabled</label>
+        <select class="form-control" id="sched-enabled">
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('sched-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveSchedule()">Save Schedule</button>
+    </div>
+  </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/yaml/yaml.min.js"></script>
-<script src="/static/js/app.js"></script>
+<!-- Toast Container -->
+<div class="toast-container" id="toast-container"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/yaml/yaml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>

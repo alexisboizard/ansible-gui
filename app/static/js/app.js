@@ -1,889 +1,733 @@
-// ──────────────────────────────────────────────
-// State & Helpers
-// ──────────────────────────────────────────────
-let cmEditor = null;
-let settingsSchema = {};
-let settingsValues = {};
-let allHosts = [];
+'use strict';
 
-// ──────────────────────────────────────────────
-// Theme Management
-// ──────────────────────────────────────────────
+// ── Theme ────────────────────────────────────────────────────────────────────
+
 function initTheme() {
-    const saved = localStorage.getItem("theme");
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const theme = saved || (prefersDark ? "dark" : "light");
-    applyTheme(theme);
+  const saved = localStorage.getItem('theme');
+  if (saved) {
+    applyTheme(saved);
+  } else {
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    applyTheme(prefersDark ? 'dark' : 'light');
+  }
 }
 
 function applyTheme(theme) {
-    const html = document.documentElement;
-    const body = document.body;
-    const icon = document.getElementById("theme-icon");
-
-    // Apply to both html and body for compatibility
-    html.classList.remove("dark-theme", "light-theme");
-    html.classList.add(theme + "-theme");
-    if (body) {
-        body.classList.remove("dark-theme", "light-theme");
-        body.classList.add(theme + "-theme");
-    }
-
-    if (icon) {
-        icon.className = theme === "dark" ? "bi bi-sun-fill" : "bi bi-moon-fill";
-    }
-
-    localStorage.setItem("theme", theme);
+  const html = document.documentElement;
+  html.classList.remove('dark-theme', 'light-theme');
+  html.classList.add(theme === 'light' ? 'light-theme' : 'dark-theme');
+  localStorage.setItem('theme', theme);
+  updateThemeIcon();
 }
 
 function toggleTheme() {
-    const html = document.documentElement;
-    const isLight = html.classList.contains("light-theme");
-    applyTheme(isLight ? "dark" : "light");
+  const isLight = document.documentElement.classList.contains('light-theme');
+  applyTheme(isLight ? 'dark' : 'light');
 }
 
-// Initialize theme immediately to avoid flash
-initTheme();
-
-function api(method, url, data) {
-    const opts = {
-        method,
-        headers: { "Content-Type": "application/json" },
-    };
-    if (data) opts.body = JSON.stringify(data);
-    return fetch(url, opts).then(async (r) => {
-        if (r.status === 401) {
-            window.location.href = "/login";
-            throw new Error("Session expirée");
-        }
-        const json = await r.json();
-        if (!r.ok) throw new Error(json.error || "Erreur serveur");
-        return json;
-    });
+function updateThemeIcon() {
+  const isLight = document.documentElement.classList.contains('light-theme');
+  const btn = document.getElementById('theme-toggle');
+  if (!btn) return;
+  btn.innerHTML = isLight
+    ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`
+    : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
 }
 
-function showToast(message, type = "success") {
-    const toast = document.getElementById("toast");
-    const body = document.getElementById("toast-body");
-    toast.className = `toast align-items-center text-white border-0 bg-${type}`;
-    body.textContent = message;
-    new bootstrap.Toast(toast, { delay: 3000 }).show();
+// ── Navigation ────────────────────────────────────────────────────────────────
+
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
+
+  const page = document.getElementById('page-' + name);
+  if (page) page.classList.add('active');
+
+  const link = document.querySelector(`.sidebar-link[data-page="${name}"]`);
+  if (link) link.classList.add('active');
+
+  document.getElementById('topbar-title').textContent =
+    link ? link.querySelector('span')?.textContent || name : name;
+
+  if (name === 'dashboard') loadDashboard();
+  if (name === 'inventory') loadHosts();
+  if (name === 'playbooks') loadPlaybooks();
+  if (name === 'executions') loadExecutions();
+  if (name === 'schedules') loadSchedules();
+  if (name === 'settings') loadSettings();
 }
 
-function formatDate(iso) {
-    if (!iso) return "-";
-    const d = new Date(iso);
-    return d.toLocaleString("fr-FR");
+// ── Toast ─────────────────────────────────────────────────────────────────────
+
+function toast(msg, type = 'info') {
+  const icons = { success: '✓', error: '✗', info: 'ℹ' };
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span class="toast-icon">${icons[type] || icons.info}</span><span class="toast-message">${msg}</span>`;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 4000);
 }
 
-function statusBadge(status) {
-    const map = {
-        pending: "secondary",
-        running: "primary",
-        success: "success",
-        failed: "danger",
-    };
-    return `<span class="badge bg-${map[status] || "secondary"} status-badge">${status}</span>`;
+// ── API ───────────────────────────────────────────────────────────────────────
+
+async function api(method, url, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const res = await fetch(url, opts);
+  if (res.status === 401) { location.href = '/login'; throw new Error('Unauthorized'); }
+  return res;
 }
 
-// ──────────────────────────────────────────────
-// Navigation
-// ──────────────────────────────────────────────
-document.querySelectorAll("[data-tab]").forEach((link) => {
-    link.addEventListener("click", (e) => {
-        e.preventDefault();
-        document.querySelectorAll("[data-tab]").forEach((l) => l.classList.remove("active"));
-        link.classList.add("active");
-        document.querySelectorAll(".tab-content-section").forEach((s) => s.classList.add("d-none"));
-        document.getElementById("tab-" + link.dataset.tab).classList.remove("d-none");
+// ── Dashboard ─────────────────────────────────────────────────────────────────
 
-        const tab = link.dataset.tab;
-        if (tab === "dashboard") loadDashboard();
-        else if (tab === "inventory") loadHosts();
-        else if (tab === "playbooks") loadPlaybooks();
-        else if (tab === "executions") loadExecutions();
-        else if (tab === "schedules") loadSchedules();
-        else if (tab === "settings") loadSettings();
-    });
-});
+async function loadDashboard() {
+  const res = await api('GET', '/api/dashboard');
+  const data = await res.json();
+  document.getElementById('stat-hosts').textContent = data.total_hosts;
+  document.getElementById('stat-reachable').textContent = data.reachable_hosts;
+  document.getElementById('stat-playbooks').textContent = data.total_playbooks;
+  document.getElementById('stat-executions').textContent = data.total_executions;
 
-// ──────────────────────────────────────────────
-// DASHBOARD
-// ──────────────────────────────────────────────
-function loadDashboard() {
-    // Load stats
-    api("GET", "/api/hosts").then((hosts) => {
-        document.getElementById("stat-hosts").textContent = hosts.length;
-        const up = hosts.filter(h => h.reachable === true).length;
-        const down = hosts.filter(h => h.reachable === false).length;
-        document.getElementById("stat-hosts-up").textContent = up;
-        document.getElementById("stat-hosts-down").textContent = down;
-    });
-
-    api("GET", "/api/playbooks").then((playbooks) => {
-        document.getElementById("stat-playbooks").textContent = playbooks.length;
-    });
-
-    // Recent executions
-    api("GET", "/api/executions").then((executions) => {
-        const tbody = document.getElementById("dashboard-recent-executions");
-        const recent = executions.slice(0, 5);
-        if (recent.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Aucune execution</td></tr>';
-            return;
-        }
-        tbody.innerHTML = recent.map(e => `
-            <tr>
-                <td>${esc(e.playbook_name || "?")}</td>
-                <td>${statusBadge(e.status)}</td>
-                <td><small class="text-muted">${formatDate(e.started_at)}</small></td>
-            </tr>
-        `).join("");
-    });
-
-    // Upcoming schedules
-    api("GET", "/api/schedules").then((schedules) => {
-        const tbody = document.getElementById("dashboard-upcoming-schedules");
-        const upcoming = schedules.filter(s => s.enabled && s.next_run_at).slice(0, 5);
-        if (upcoming.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="2" class="text-center text-muted">Aucune planification</td></tr>';
-            return;
-        }
-        tbody.innerHTML = upcoming.map(s => `
-            <tr>
-                <td>${esc(s.playbook_name || "?")}</td>
-                <td><small class="text-muted">${formatDate(s.next_run_at)}</small></td>
-            </tr>
-        `).join("");
-    });
+  const tbody = document.getElementById('recent-executions-tbody');
+  tbody.innerHTML = '';
+  for (const e of (data.recent_executions || [])) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${e.playbook_name || '-'}</td>
+      <td><span class="badge ${statusBadge(e.status)}">${e.status}</span></td>
+      <td>${e.triggered_by || '-'}</td>
+      <td>${fmtDate(e.started_at)}</td>
+    `;
+    tbody.appendChild(tr);
+  }
 }
 
-// ──────────────────────────────────────────────
-// HOSTS
-// ──────────────────────────────────────────────
-function loadHosts() {
-    api("GET", "/api/hosts").then((hosts) => {
-        allHosts = hosts;
-        renderHosts(hosts);
-    });
+// ── Hosts ─────────────────────────────────────────────────────────────────────
+
+let hostsData = [];
+
+async function loadHosts(q = '') {
+  const url = q ? `/api/hosts?q=${encodeURIComponent(q)}` : '/api/hosts';
+  const res = await api('GET', url);
+  hostsData = await res.json();
+  renderHosts();
 }
 
-function hostStatusDot(host) {
-    if (host.reachable === null || host.reachable === undefined) {
-        return '<span class="host-status-dot status-unknown" title="Inconnu"></span>';
-    }
-    if (host.reachable) {
-        const latency = host.ping_latency != null ? ` (${host.ping_latency.toFixed(1)} ms)` : "";
-        const lastPing = host.last_ping ? `\nDernier ping : ${formatDate(host.last_ping)}` : "";
-        return `<span class="host-status-dot status-up" title="Joignable${latency}${lastPing}"></span>`;
-    }
-    const lastPing = host.last_ping ? `\nDernier ping : ${formatDate(host.last_ping)}` : "";
-    return `<span class="host-status-dot status-down" title="Injoignable${lastPing}"></span>`;
+function renderHosts() {
+  const tbody = document.getElementById('hosts-tbody');
+  tbody.innerHTML = '';
+
+  if (hostsData.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      <p>No hosts found. Add your first host to get started.</p></div></td></tr>`;
+    return;
+  }
+
+  for (const h of hostsData) {
+    const groups = (h.groups || '').split(',').filter(Boolean);
+    const groupTags = groups.map(g => `<span class="group-tag">${g.trim()}</span>`).join('');
+    const pingDot = h.reachable === true
+      ? `<span class="ping-dot reachable"></span>`
+      : h.reachable === false
+        ? `<span class="ping-dot unreachable"></span>`
+        : `<span class="ping-dot unknown"></span>`;
+
+    const latency = h.ping_latency ? `<span style="font-size:11px;color:var(--text-muted)">${h.ping_latency}ms</span>` : '';
+
+    const osBadge = h.os_type === 'windows'
+      ? `<span class="os-badge windows">⊞ Windows</span>`
+      : `<span class="os-badge linux">🐧 Linux</span>`;
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${pingDot} ${latency}</td>
+      <td><strong>${h.name}</strong></td>
+      <td style="font-family:monospace;font-size:12px">${h.address}</td>
+      <td>${osBadge}</td>
+      <td><div class="group-tags">${groupTags || '<span style="color:var(--text-muted)">—</span>'}</div></td>
+      <td>${h.last_ping ? fmtDate(h.last_ping) : '<span style="color:var(--text-muted)">Never</span>'}</td>
+      <td>
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-icon btn-sm" title="Edit" onclick="openHostModal(${h.id})">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="btn btn-icon btn-sm" title="Delete" onclick="deleteHost(${h.id})" style="color:var(--danger);border-color:rgba(245,54,92,0.3)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+          </button>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  }
 }
 
-function renderHosts(hosts) {
-    const tbody = document.getElementById("hosts-table");
-    const empty = document.getElementById("hosts-empty");
-    if (hosts.length === 0) {
-        tbody.innerHTML = "";
-        empty.classList.remove("d-none");
-        return;
-    }
-    empty.classList.add("d-none");
-    tbody.innerHTML = hosts
-        .map(
-            (h) => `
-        <tr>
-            <td class="text-center">${hostStatusDot(h)}</td>
-            <td><strong>${esc(h.hostname)}</strong></td>
-            <td><code>${esc(h.ip_address)}</code></td>
-            <td>${h.port}</td>
-            <td>${esc(h.username)}</td>
-            <td>${(h.group_name || "all").split(",").map(g => `<span class="badge bg-info me-1">${esc(g.trim())}</span>`).join("")}</td>
-            <td>${esc(h.description)}</td>
-            <td>
-                <div class="btn-group btn-group-sm">
-                    <button class="btn btn-outline-primary" onclick="editHost(${h.id})" title="Modifier">
-                        <i class="bi bi-pencil"></i>
-                    </button>
-                    <button class="btn btn-outline-danger" onclick="deleteHost(${h.id})" title="Supprimer">
-                        <i class="bi bi-trash"></i>
-                    </button>
-                </div>
-            </td>
-        </tr>`
-        )
-        .join("");
+function openHostModal(id = null) {
+  const host = id ? hostsData.find(h => h.id === id) : null;
+  document.getElementById('host-modal-title').textContent = host ? 'Edit Host' : 'Add Host';
+  document.getElementById('host-id').value = host ? host.id : '';
+  document.getElementById('host-name').value = host ? host.name : '';
+  document.getElementById('host-address').value = host ? host.address : '';
+  document.getElementById('host-groups').value = host ? (host.groups || '') : '';
+  document.getElementById('host-os').value = host ? (host.os_type || 'linux') : 'linux';
+
+  let vars = {};
+  if (host) { try { vars = JSON.parse(host.variables || '{}'); } catch(e) {} }
+  document.getElementById('host-vars').value = JSON.stringify(vars, null, 2);
+
+  showModal('host-modal');
 }
 
-function triggerPing() {
-    api("POST", "/api/hosts/ping")
-        .then((r) => {
-            showToast(r.message);
-            // Reload hosts after a delay to let ping finish
-            setTimeout(loadHosts, 5000);
-        })
-        .catch((e) => showToast(e.message, "danger"));
+async function saveHost() {
+  const id = document.getElementById('host-id').value;
+  let vars = {};
+  try { vars = JSON.parse(document.getElementById('host-vars').value || '{}'); } catch(e) {
+    toast('Invalid JSON in variables', 'error'); return;
+  }
+
+  const data = {
+    name: document.getElementById('host-name').value.trim(),
+    address: document.getElementById('host-address').value.trim(),
+    groups: document.getElementById('host-groups').value.trim(),
+    os_type: document.getElementById('host-os').value,
+    variables: vars,
+  };
+
+  if (!data.name || !data.address) { toast('Name and address are required', 'error'); return; }
+
+  const res = id
+    ? await api('PUT', `/api/hosts/${id}`, data)
+    : await api('POST', '/api/hosts', data);
+
+  if (res.ok) {
+    toast(id ? 'Host updated' : 'Host created', 'success');
+    closeModal('host-modal');
+    loadHosts();
+  } else {
+    toast('Failed to save host', 'error');
+  }
 }
 
-function showImportModal() {
-    document.getElementById("import-file").value = "";
-    document.getElementById("import-result").innerHTML = "";
-    new bootstrap.Modal(document.getElementById("importModal")).show();
+async function deleteHost(id) {
+  if (!confirm('Delete this host?')) return;
+  const res = await api('DELETE', `/api/hosts/${id}`);
+  if (res.ok) { toast('Host deleted', 'success'); loadHosts(); }
+  else { toast('Failed to delete host', 'error'); }
 }
 
-function importHosts() {
-    const fileInput = document.getElementById("import-file");
-    const resultDiv = document.getElementById("import-result");
-
-    if (!fileInput.files || !fileInput.files[0]) {
-        resultDiv.innerHTML = '<div class="alert alert-warning">Selectionnez un fichier CSV</div>';
-        return;
-    }
-
-    const formData = new FormData();
-    formData.append("file", fileInput.files[0]);
-
-    resultDiv.innerHTML = '<div class="text-muted"><i class="bi bi-hourglass-split"></i> Import en cours...</div>';
-
-    fetch("/api/hosts/import", {
-        method: "POST",
-        body: formData,
-    })
-        .then(async (r) => {
-            const json = await r.json();
-            if (!r.ok) throw new Error(json.error || "Erreur serveur");
-            return json;
-        })
-        .then((r) => {
-            let html = `<div class="alert alert-success"><i class="bi bi-check-circle"></i> ${esc(r.message)}</div>`;
-            if (r.errors && r.errors.length > 0) {
-                html += '<div class="alert alert-warning mt-2"><strong>Avertissements :</strong><ul class="mb-0 mt-2">';
-                r.errors.forEach((e) => {
-                    html += `<li>${esc(e)}</li>`;
-                });
-                html += "</ul></div>";
-            }
-            resultDiv.innerHTML = html;
-            loadHosts();
-        })
-        .catch((e) => {
-            resultDiv.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle"></i> ${esc(e.message)}</div>`;
-        });
+async function pingAllHosts() {
+  const res = await api('POST', '/api/hosts/ping');
+  if (res.ok) {
+    toast('Ping started — refreshing in 5 seconds', 'info');
+    setTimeout(() => loadHosts(), 5000);
+  }
 }
 
-function filterHosts() {
-    const q = document.getElementById("hosts-search").value.toLowerCase().trim();
-    if (!q) {
-        renderHosts(allHosts);
-        return;
-    }
-    const filtered = allHosts.filter((h) =>
-        (h.hostname || "").toLowerCase().includes(q) ||
-        (h.ip_address || "").toLowerCase().includes(q) ||
-        (h.group_name || "").toLowerCase().includes(q) ||
-        (h.username || "").toLowerCase().includes(q) ||
-        (h.description || "").toLowerCase().includes(q)
-    );
-    renderHosts(filtered);
+async function exportHosts() {
+  window.location.href = '/api/hosts/export';
 }
 
-function showHostModal(host = null) {
-    document.getElementById("hostModalTitle").textContent = host ? "Modifier l'hôte" : "Ajouter un hôte";
-    document.getElementById("host-id").value = host ? host.id : "";
-    document.getElementById("host-hostname").value = host ? host.hostname : "";
-    document.getElementById("host-ip").value = host ? host.ip_address : "";
-    document.getElementById("host-port").value = host ? host.port : 22;
-    document.getElementById("host-username").value = host ? host.username : "ansible";
-    document.getElementById("host-group").value = host ? host.group_name : "all";
-    document.getElementById("host-variables").value = host ? host.variables : "{}";
-    document.getElementById("host-description").value = host ? host.description : "";
-    new bootstrap.Modal(document.getElementById("hostModal")).show();
+function openImportModal() {
+  showModal('import-modal');
 }
 
-function editHost(id) {
-    api("GET", `/api/hosts/${id}`).then((host) => showHostModal(host));
+async function importHosts() {
+  const fileInput = document.getElementById('import-file');
+  if (!fileInput.files[0]) { toast('Select a CSV file first', 'error'); return; }
+  const formData = new FormData();
+  formData.append('file', fileInput.files[0]);
+  const res = await fetch('/api/hosts/import', { method: 'POST', body: formData });
+  if (res.ok) {
+    const data = await res.json();
+    toast(`Imported ${data.imported} hosts`, 'success');
+    closeModal('import-modal');
+    loadHosts();
+  } else {
+    toast('Import failed', 'error');
+  }
 }
 
-function saveHost() {
-    const id = document.getElementById("host-id").value;
-    const data = {
-        hostname: document.getElementById("host-hostname").value.trim(),
-        ip_address: document.getElementById("host-ip").value.trim(),
-        port: parseInt(document.getElementById("host-port").value) || 22,
-        username: document.getElementById("host-username").value.trim() || "ansible",
-        group_name: document.getElementById("host-group").value.trim() || "all",
-        variables: document.getElementById("host-variables").value.trim() || "{}",
-        description: document.getElementById("host-description").value.trim(),
-    };
+// ── Playbooks ─────────────────────────────────────────────────────────────────
 
-    if (!data.hostname || !data.ip_address) {
-        showToast("Hostname et adresse IP sont requis", "danger");
-        return;
-    }
+let playbooksData = [];
+let cmEditor = null;
 
-    const method = id ? "PUT" : "POST";
-    const url = id ? `/api/hosts/${id}` : "/api/hosts";
-
-    api(method, url, data)
-        .then(() => {
-            bootstrap.Modal.getInstance(document.getElementById("hostModal")).hide();
-            showToast(id ? "Hôte mis à jour" : "Hôte ajouté");
-            loadHosts();
-        })
-        .catch((e) => showToast(e.message, "danger"));
-}
-
-function deleteHost(id) {
-    if (!confirm("Supprimer cet hôte ?")) return;
-    api("DELETE", `/api/hosts/${id}`)
-        .then(() => {
-            showToast("Hôte supprimé");
-            loadHosts();
-        })
-        .catch((e) => showToast(e.message, "danger"));
-}
-
-// ──────────────────────────────────────────────
-// PLAYBOOKS
-// ──────────────────────────────────────────────
-function loadPlaybooks() {
-    api("GET", "/api/playbooks").then((playbooks) => {
-        const container = document.getElementById("playbooks-list");
-        const empty = document.getElementById("playbooks-empty");
-        if (playbooks.length === 0) {
-            container.innerHTML = "";
-            empty.classList.remove("d-none");
-            return;
-        }
-        empty.classList.add("d-none");
-        container.innerHTML = playbooks
-            .map(
-                (p) => `
-            <div class="col-md-4 mb-3">
-                <div class="card playbook-card h-100">
-                    <div class="card-body">
-                        <h5 class="card-title"><i class="bi bi-file-earmark-code"></i> ${esc(p.name)}</h5>
-                        <p class="card-text text-muted">${esc(p.description) || "<em>Pas de description</em>"}</p>
-                        <small class="text-muted">Modifié : ${formatDate(p.updated_at)}</small>
-                    </div>
-                    <div class="card-footer d-flex gap-2">
-                        <button class="btn btn-sm btn-outline-primary" onclick="editPlaybook(${p.id})">
-                            <i class="bi bi-pencil"></i> Modifier
-                        </button>
-                        <button class="btn btn-sm btn-success" onclick="showRunModal(${p.id}, '${esc(p.name)}')">
-                            <i class="bi bi-play-fill"></i> Exécuter
-                        </button>
-                        <button class="btn btn-sm btn-outline-danger ms-auto" onclick="deletePlaybook(${p.id})">
-                            <i class="bi bi-trash"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>`
-            )
-            .join("");
-    });
-}
-
-function showPlaybookModal(playbook = null) {
-    document.getElementById("playbookModalTitle").textContent = playbook
-        ? "Modifier le playbook"
-        : "Nouveau playbook";
-    document.getElementById("playbook-id").value = playbook ? playbook.id : "";
-    document.getElementById("playbook-name").value = playbook ? playbook.name : "";
-    document.getElementById("playbook-description").value = playbook ? playbook.description : "";
-
-    const defaultContent = `---
-- name: Mon playbook
+const defaultPlaybook = `---
+- name: My Playbook
   hosts: all
-  become: true
+  gather_facts: true
   tasks:
-    - name: Ping
-      ansible.builtin.ping:
+    - name: Example task
+      debug:
+        msg: "Hello from Ansible GUI"
 `;
 
-    const modal = new bootstrap.Modal(document.getElementById("playbookModal"));
-    modal.show();
-
-    document.getElementById("playbookModal").addEventListener(
-        "shown.bs.modal",
-        function initCM() {
-            const textarea = document.getElementById("playbook-content");
-            textarea.value = playbook ? playbook.content : defaultContent;
-
-            if (cmEditor) {
-                cmEditor.toTextArea();
-                cmEditor = null;
-            }
-
-            cmEditor = CodeMirror.fromTextArea(textarea, {
-                mode: "yaml",
-                theme: "dracula",
-                lineNumbers: true,
-                indentUnit: 2,
-                tabSize: 2,
-                indentWithTabs: false,
-                lineWrapping: true,
-                extraKeys: {
-                    Tab: function (cm) {
-                        cm.replaceSelection("  ", "end");
-                    },
-                },
-            });
-            cmEditor.refresh();
-
-            document.getElementById("playbookModal").removeEventListener("shown.bs.modal", initCM);
-        },
-        { once: true }
-    );
+async function loadPlaybooks() {
+  const res = await api('GET', '/api/playbooks');
+  playbooksData = await res.json();
+  renderPlaybooks();
 }
 
-function editPlaybook(id) {
-    api("GET", `/api/playbooks/${id}`).then((p) => showPlaybookModal(p));
+function renderPlaybooks() {
+  const container = document.getElementById('playbooks-grid');
+  container.innerHTML = '';
+
+  if (playbooksData.length === 0) {
+    container.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      <p>No playbooks yet. Create your first one!</p></div>`;
+    return;
+  }
+
+  for (const p of playbooksData) {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.style.cssText = 'cursor:default';
+    card.innerHTML = `
+      <div class="card-body">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px">
+          <div>
+            <div style="font-weight:600;font-size:14px">${p.name}</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${p.description || 'No description'}</div>
+          </div>
+          <div style="display:flex;gap:4px;flex-shrink:0">
+            <button class="btn btn-icon btn-sm" title="Edit" onclick="openPlaybookModal(${p.id})">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>
+            <button class="btn btn-icon btn-sm" title="Run" onclick="openRunModal(${p.id})" style="color:var(--success);border-color:rgba(39,217,108,0.3)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            </button>
+            <button class="btn btn-icon btn-sm" title="Delete" onclick="deletePlaybook(${p.id})" style="color:var(--danger);border-color:rgba(245,54,92,0.3)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
+            </button>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted)">Updated ${fmtDate(p.updated_at)}</div>
+      </div>
+    `;
+    container.appendChild(card);
+  }
 }
 
-function savePlaybook() {
-    const id = document.getElementById("playbook-id").value;
-    const content = cmEditor ? cmEditor.getValue() : document.getElementById("playbook-content").value;
-    const data = {
-        name: document.getElementById("playbook-name").value.trim(),
-        description: document.getElementById("playbook-description").value.trim(),
-        content: content,
-    };
+function openPlaybookModal(id = null) {
+  const pb = id ? playbooksData.find(p => p.id === id) : null;
 
-    if (!data.name || !data.content) {
-        showToast("Le nom et le contenu sont requis", "danger");
-        return;
-    }
+  document.getElementById('pb-modal-title').textContent = pb ? 'Edit Playbook' : 'New Playbook';
+  document.getElementById('pb-id').value = pb ? pb.id : '';
+  document.getElementById('pb-name').value = pb ? pb.name : '';
+  document.getElementById('pb-description').value = pb ? (pb.description || '') : '';
 
-    const method = id ? "PUT" : "POST";
-    const url = id ? `/api/playbooks/${id}` : "/api/playbooks";
+  // Destroy existing CodeMirror BEFORE showing modal
+  if (cmEditor) {
+    cmEditor.toTextArea();
+    cmEditor = null;
+  }
 
-    api(method, url, data)
-        .then(() => {
-            bootstrap.Modal.getInstance(document.getElementById("playbookModal")).hide();
-            if (cmEditor) {
-                cmEditor.toTextArea();
-                cmEditor = null;
-            }
-            showToast(id ? "Playbook mis à jour" : "Playbook créé");
-            loadPlaybooks();
-        })
-        .catch((e) => showToast(e.message, "danger"));
-}
+  const textarea = document.getElementById('pb-content');
+  textarea.value = pb ? pb.content : defaultPlaybook;
 
-function deletePlaybook(id) {
-    if (!confirm("Supprimer ce playbook ?")) return;
-    api("DELETE", `/api/playbooks/${id}`)
-        .then(() => {
-            showToast("Playbook supprimé");
-            loadPlaybooks();
-        })
-        .catch((e) => showToast(e.message, "danger"));
-}
+  showModal('pb-modal');
 
-// ──────────────────────────────────────────────
-// EXECUTIONS
-// ──────────────────────────────────────────────
-function showRunModal(playbookId, playbookName) {
-    document.getElementById("run-playbook-id").value = playbookId;
-    document.getElementById("run-playbook-name").textContent = playbookName;
-    document.getElementById("run-hosts").value = "all";
-    document.getElementById("run-notify").checked = false;
-    new bootstrap.Modal(document.getElementById("runModal")).show();
-}
-
-function executePlaybook() {
-    const data = {
-        playbook_id: parseInt(document.getElementById("run-playbook-id").value),
-        hosts_pattern: document.getElementById("run-hosts").value.trim() || "all",
-        notify: document.getElementById("run-notify").checked,
-    };
-
-    api("POST", "/api/executions", data)
-        .then((result) => {
-            bootstrap.Modal.getInstance(document.getElementById("runModal")).hide();
-            showToast("Playbook lancé");
-            document.querySelector('[data-tab="executions"]').click();
-            loadExecutions();
-            // Open output modal immediately for real-time streaming
-            if (result && result.id) {
-                setTimeout(() => viewOutput(result.id), 300);
-            }
-        })
-        .catch((e) => showToast(e.message, "danger"));
-}
-
-function loadExecutions() {
-    api("GET", "/api/executions").then((executions) => {
-        const tbody = document.getElementById("executions-table");
-        tbody.innerHTML = executions
-            .map(
-                (e) => `
-            <tr>
-                <td>${e.id}</td>
-                <td>${esc(e.playbook_name || "?")}</td>
-                <td>${esc(e.hosts_pattern)}</td>
-                <td>${statusBadge(e.status)}</td>
-                <td>${formatDate(e.started_at)}</td>
-                <td>${formatDate(e.finished_at)}</td>
-                <td>
-                    <div class="btn-group btn-group-sm">
-                        <button class="btn btn-outline-secondary" onclick="viewOutput(${e.id})">
-                            <i class="bi bi-terminal"></i> Sortie
-                        </button>
-                        ${e.status === "running" || e.status === "pending" ? `<button class="btn btn-outline-danger" onclick="cancelExecution(${e.id})" title="Annuler"><i class="bi bi-x-circle"></i></button>` : ""}
-                    </div>
-                </td>
-            </tr>`
-            )
-            .join("");
+  // Re-initialize CodeMirror after modal is visible
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      cmEditor = CodeMirror.fromTextArea(textarea, {
+        mode: 'yaml',
+        theme: 'dracula',
+        lineNumbers: true,
+        indentUnit: 2,
+        tabSize: 2,
+        indentWithTabs: false,
+        lineWrapping: false,
+        autoCloseBrackets: true,
+        matchBrackets: true,
+        extraKeys: { Tab: (cm) => cm.replaceSelection('  ') },
+      });
+      cmEditor.refresh();
     });
+  });
 }
 
-let outputPollingInterval = null;
+async function savePlaybook() {
+  const id = document.getElementById('pb-id').value;
+  const content = cmEditor ? cmEditor.getValue() : document.getElementById('pb-content').value;
 
-function viewOutput(executionId) {
-    const outputEl = document.getElementById("execution-output");
-    const modal = new bootstrap.Modal(document.getElementById("outputModal"));
+  const data = {
+    name: document.getElementById('pb-name').value.trim(),
+    description: document.getElementById('pb-description').value.trim(),
+    content,
+  };
 
-    // Clear any existing polling
-    if (outputPollingInterval) {
-        clearInterval(outputPollingInterval);
-        outputPollingInterval = null;
+  if (!data.name) { toast('Playbook name is required', 'error'); return; }
+
+  const res = id
+    ? await api('PUT', `/api/playbooks/${id}`, data)
+    : await api('POST', '/api/playbooks', data);
+
+  if (res.ok) {
+    toast(id ? 'Playbook saved' : 'Playbook created', 'success');
+    closeModal('pb-modal');
+    loadPlaybooks();
+  } else {
+    const err = await res.json().catch(() => ({}));
+    toast(err.error || 'Failed to save playbook', 'error');
+  }
+}
+
+async function deletePlaybook(id) {
+  if (!confirm('Delete this playbook?')) return;
+  const res = await api('DELETE', `/api/playbooks/${id}`);
+  if (res.ok) { toast('Playbook deleted', 'success'); loadPlaybooks(); }
+  else { toast('Failed to delete playbook', 'error'); }
+}
+
+// ── Run Modal ─────────────────────────────────────────────────────────────────
+
+let runPlaybookId = null;
+
+function openRunModal(pbId) {
+  runPlaybookId = pbId;
+  const pb = playbooksData.find(p => p.id === pbId);
+  document.getElementById('run-playbook-name').textContent = pb ? pb.name : '';
+  document.getElementById('run-host-pattern').value = 'all';
+  showModal('run-modal');
+}
+
+async function executePlaybook() {
+  if (!runPlaybookId) return;
+  const hostPattern = document.getElementById('run-host-pattern').value.trim() || 'all';
+
+  const res = await api('POST', '/api/executions', {
+    playbook_id: runPlaybookId,
+    host_pattern: hostPattern,
+  });
+
+  if (res.ok) {
+    const data = await res.json();
+    toast('Execution started', 'success');
+    closeModal('run-modal');
+    showPage('executions');
+    setTimeout(() => openOutputModal(data.id), 500);
+  } else {
+    toast('Failed to start execution', 'error');
+  }
+}
+
+// ── Executions ────────────────────────────────────────────────────────────────
+
+let outputPollTimer = null;
+
+async function loadExecutions() {
+  const res = await api('GET', '/api/executions');
+  const executions = await res.json();
+  renderExecutions(executions);
+}
+
+function renderExecutions(executions) {
+  const tbody = document.getElementById('executions-tbody');
+  tbody.innerHTML = '';
+
+  if (executions.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <p>No executions yet.</p></div></td></tr>`;
+    return;
+  }
+
+  for (const e of executions) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>#${e.id}</td>
+      <td><strong>${e.playbook_name || '-'}</strong></td>
+      <td><code style="font-size:11px">${e.host_pattern}</code></td>
+      <td><span class="badge ${statusBadge(e.status)}">${e.status}</span></td>
+      <td>${fmtDate(e.started_at)}</td>
+      <td>
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-icon btn-sm" title="View output" onclick="openOutputModal(${e.id})">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+          </button>
+          ${(e.status === 'running' || e.status === 'pending') ? `
+          <button class="btn btn-icon btn-sm" title="Cancel" onclick="cancelExecution(${e.id})" style="color:var(--warning)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+          </button>` : ''}
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+async function openOutputModal(execId) {
+  document.getElementById('output-exec-id').textContent = `#${execId}`;
+  document.getElementById('output-content').textContent = 'Loading...';
+  showModal('output-modal');
+
+  if (outputPollTimer) clearInterval(outputPollTimer);
+
+  const poll = async () => {
+    const res = await api('GET', `/api/executions/${execId}`);
+    if (!res.ok) return;
+    const e = await res.json();
+    const out = document.getElementById('output-content');
+    out.textContent = e.output || '(no output)';
+    out.scrollTop = out.scrollHeight;
+    document.getElementById('output-status').innerHTML =
+      `<span class="badge ${statusBadge(e.status)}">${e.status}</span>`;
+
+    if (e.status !== 'running' && e.status !== 'pending') {
+      clearInterval(outputPollTimer);
+      outputPollTimer = null;
     }
+  };
 
-    function updateOutput() {
-        api("GET", `/api/executions/${executionId}`).then((e) => {
-            outputEl.textContent = e.output || "(en attente...)";
-            // Auto-scroll to bottom
-            outputEl.scrollTop = outputEl.scrollHeight;
+  await poll();
+  outputPollTimer = setInterval(poll, 800);
+}
 
-            // Stop polling if execution is finished
-            if (e.status !== "running" && e.status !== "pending") {
-                if (outputPollingInterval) {
-                    clearInterval(outputPollingInterval);
-                    outputPollingInterval = null;
-                }
-                loadExecutions(); // Refresh list
-            }
-        });
-    }
+async function cancelExecution(id) {
+  const res = await api('POST', `/api/executions/${id}/cancel`);
+  if (res.ok) { toast('Execution cancelled', 'success'); loadExecutions(); }
+}
 
-    // Initial load
-    updateOutput();
-    modal.show();
+async function purgeExecutions() {
+  if (!confirm('Delete ALL execution history?')) return;
+  const res = await api('POST', '/api/executions/purge');
+  if (res.ok) { toast('Executions purged', 'success'); loadExecutions(); }
+}
 
-    // Start polling every 500ms for real-time updates
-    outputPollingInterval = setInterval(updateOutput, 500);
+// ── Schedules ─────────────────────────────────────────────────────────────────
 
-    // Stop polling when modal is closed
-    document.getElementById("outputModal").addEventListener("hidden.bs.modal", function handler() {
-        if (outputPollingInterval) {
-            clearInterval(outputPollingInterval);
-            outputPollingInterval = null;
+let schedulesData = [];
+
+async function loadSchedules() {
+  const [schedRes, pbRes] = await Promise.all([
+    api('GET', '/api/schedules'),
+    api('GET', '/api/playbooks'),
+  ]);
+  schedulesData = await schedRes.json();
+  playbooksData = await pbRes.json();
+  renderSchedules();
+}
+
+function renderSchedules() {
+  const tbody = document.getElementById('schedules-tbody');
+  tbody.innerHTML = '';
+
+  if (schedulesData.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <p>No schedules configured.</p></div></td></tr>`;
+    return;
+  }
+
+  for (const s of schedulesData) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><strong>${s.name}</strong></td>
+      <td>${s.playbook_name || '-'}</td>
+      <td><code style="font-size:11px">${s.cron_expr}</code></td>
+      <td><code style="font-size:11px">${s.host_pattern}</code></td>
+      <td>
+        ${s.last_run_at ? `${fmtDate(s.last_run_at)} <span class="badge ${statusBadge(s.last_run_status)}">${s.last_run_status}</span>` : '<span style="color:var(--text-muted)">Never</span>'}
+      </td>
+      <td>${s.next_run_at ? fmtDate(s.next_run_at) : '<span style="color:var(--text-muted)">—</span>'}</td>
+      <td>
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-icon btn-sm" onclick="openScheduleModal(${s.id})">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="btn btn-icon btn-sm" onclick="deleteSchedule(${s.id})" style="color:var(--danger);border-color:rgba(245,54,92,0.3)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
+          </button>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+function openScheduleModal(id = null) {
+  const s = id ? schedulesData.find(x => x.id === id) : null;
+
+  document.getElementById('sched-modal-title').textContent = s ? 'Edit Schedule' : 'New Schedule';
+  document.getElementById('sched-id').value = s ? s.id : '';
+  document.getElementById('sched-name').value = s ? s.name : '';
+  document.getElementById('sched-cron').value = s ? s.cron_expr : '0 * * * *';
+  document.getElementById('sched-host-pattern').value = s ? s.host_pattern : 'all';
+  document.getElementById('sched-enabled').value = s ? (s.enabled ? 'true' : 'false') : 'true';
+
+  const pbSelect = document.getElementById('sched-playbook');
+  pbSelect.innerHTML = '';
+  for (const p of playbooksData) {
+    const opt = document.createElement('option');
+    opt.value = p.id;
+    opt.textContent = p.name;
+    if (s && s.playbook_id === p.id) opt.selected = true;
+    pbSelect.appendChild(opt);
+  }
+
+  showModal('sched-modal');
+}
+
+async function saveSchedule() {
+  const id = document.getElementById('sched-id').value;
+  const data = {
+    name: document.getElementById('sched-name').value.trim(),
+    playbook_id: parseInt(document.getElementById('sched-playbook').value),
+    cron_expr: document.getElementById('sched-cron').value.trim(),
+    host_pattern: document.getElementById('sched-host-pattern').value.trim() || 'all',
+    enabled: document.getElementById('sched-enabled').value === 'true',
+  };
+
+  if (!data.name || !data.cron_expr) { toast('Name and cron expression are required', 'error'); return; }
+
+  const res = id
+    ? await api('PUT', `/api/schedules/${id}`, data)
+    : await api('POST', '/api/schedules', data);
+
+  if (res.ok) {
+    toast(id ? 'Schedule updated' : 'Schedule created', 'success');
+    closeModal('sched-modal');
+    loadSchedules();
+  } else {
+    toast('Failed to save schedule', 'error');
+  }
+}
+
+async function deleteSchedule(id) {
+  if (!confirm('Delete this schedule?')) return;
+  const res = await api('DELETE', `/api/schedules/${id}`);
+  if (res.ok) { toast('Schedule deleted', 'success'); loadSchedules(); }
+}
+
+function setCronPreset(expr) {
+  document.getElementById('sched-cron').value = expr;
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+
+let settingsData = {};
+let settingsSchema = [];
+
+async function loadSettings() {
+  const [dataRes, schemaRes] = await Promise.all([
+    api('GET', '/api/settings'),
+    api('GET', '/api/settings/schema'),
+  ]);
+  settingsData = await dataRes.json();
+  settingsSchema = await schemaRes.json();
+  renderSettings();
+}
+
+function renderSettings() {
+  const nav = document.getElementById('settings-nav');
+  const content = document.getElementById('settings-content');
+  nav.innerHTML = '';
+  content.innerHTML = '';
+
+  settingsSchema.forEach((section, idx) => {
+    const navItem = document.createElement('button');
+    navItem.className = `settings-nav-item${idx === 0 ? ' active' : ''}`;
+    navItem.textContent = section.label;
+    navItem.onclick = () => {
+      document.querySelectorAll('.settings-nav-item').forEach(n => n.classList.remove('active'));
+      document.querySelectorAll('.settings-section').forEach(s => s.classList.remove('active'));
+      navItem.classList.add('active');
+      document.getElementById(`settings-${section.category}`).classList.add('active');
+    };
+    nav.appendChild(navItem);
+
+    const div = document.createElement('div');
+    div.id = `settings-${section.category}`;
+    div.className = `settings-section${idx === 0 ? ' active' : ''}`;
+
+    let html = `<h3 style="font-size:15px;font-weight:600;margin:0 0 16px">${section.label}</h3>`;
+    for (const field of section.fields) {
+      const val = settingsData[field.key] || '';
+      html += `<div class="form-group">
+        <label class="form-label">${field.label}</label>`;
+
+      if (field.type === 'select') {
+        html += `<select class="form-control" id="setting-${field.key}">`;
+        for (const [v, l] of field.options) {
+          html += `<option value="${v}"${val === v ? ' selected' : ''}>${l}</option>`;
         }
-        this.removeEventListener("hidden.bs.modal", handler);
-    });
-}
-
-function purgeExecutions(mode) {
-    const labels = {
-        completed: "toutes les exécutions terminées",
-        "7days": "les exécutions de plus de 7 jours",
-        "30days": "les exécutions de plus de 30 jours",
-        all: "TOUTES les exécutions",
-    };
-    if (!confirm(`Supprimer ${labels[mode] || mode} ?`)) return;
-
-    api("POST", "/api/executions/purge", { mode })
-        .then((r) => {
-            showToast(r.message);
-            loadExecutions();
-        })
-        .catch((e) => showToast(e.message, "danger"));
-}
-
-function cancelExecution(id) {
-    if (!confirm("Annuler cette exécution ?")) return;
-    api("POST", `/api/executions/${id}/cancel`)
-        .then((r) => {
-            showToast(r.message);
-            loadExecutions();
-        })
-        .catch((e) => showToast(e.message, "danger"));
-}
-
-// ──────────────────────────────────────────────
-// SCHEDULES
-// ──────────────────────────────────────────────
-function scheduleLastRunBadge(s) {
-    if (!s.last_run_at) return '<span class="text-muted">-</span>';
-    const statusMap = { success: "success", failed: "danger" };
-    const cls = statusMap[s.last_run_status] || "secondary";
-    return `<span class="badge bg-${cls}">${s.last_run_status}</span> <small class="text-muted">${formatDate(s.last_run_at)}</small>`;
-}
-
-function loadSchedules() {
-    api("GET", "/api/schedules").then((schedules) => {
-        const tbody = document.getElementById("schedules-table");
-        tbody.innerHTML = schedules
-            .map(
-                (s) => `
-            <tr>
-                <td>${esc(s.playbook_name || "?")}</td>
-                <td><code>${esc(s.cron_expression)}</code></td>
-                <td>${esc(s.hosts_pattern)}</td>
-                <td>${scheduleLastRunBadge(s)}</td>
-                <td>${s.next_run_at ? formatDate(s.next_run_at) : '<span class="text-muted">-</span>'}</td>
-                <td>${esc(s.notify_email) || "-"}</td>
-                <td>
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" ${s.enabled ? "checked" : ""}
-                               onchange="toggleSchedule(${s.id}, this.checked)">
-                    </div>
-                </td>
-                <td>
-                    <button class="btn btn-sm btn-outline-danger" onclick="deleteSchedule(${s.id})">
-                        <i class="bi bi-trash"></i>
-                    </button>
-                </td>
-            </tr>`
-            )
-            .join("");
-    });
-}
-
-function showScheduleModal() {
-    document.getElementById("schedule-id").value = "";
-    document.getElementById("schedule-cron").value = "";
-    document.getElementById("schedule-hosts").value = "all";
-    document.getElementById("schedule-email").value = "";
-    document.getElementById("schedule-description").value = "";
-    document.getElementById("schedule-enabled").checked = true;
-
-    api("GET", "/api/playbooks").then((playbooks) => {
-        const select = document.getElementById("schedule-playbook");
-        select.innerHTML = playbooks
-            .map((p) => `<option value="${p.id}">${esc(p.name)}</option>`)
-            .join("");
-        new bootstrap.Modal(document.getElementById("scheduleModal")).show();
-    });
-}
-
-function saveSchedule() {
-    const id = document.getElementById("schedule-id").value;
-    const data = {
-        playbook_id: parseInt(document.getElementById("schedule-playbook").value),
-        cron_expression: document.getElementById("schedule-cron").value.trim(),
-        hosts_pattern: document.getElementById("schedule-hosts").value.trim() || "all",
-        notify_email: document.getElementById("schedule-email").value.trim(),
-        description: document.getElementById("schedule-description").value.trim(),
-        enabled: document.getElementById("schedule-enabled").checked,
-    };
-
-    if (!data.cron_expression) {
-        showToast("L'expression cron est requise", "danger");
-        return;
+        html += '</select>';
+      } else if (field.type === 'textarea') {
+        html += `<textarea class="form-control" id="setting-${field.key}" rows="8" placeholder="${field.label}">${val}</textarea>`;
+      } else {
+        const inputType = field.type === 'password' ? 'password' : 'text';
+        html += `<input type="${inputType}" class="form-control" id="setting-${field.key}" value="${val}" placeholder="${field.label}">`;
+      }
+      html += '</div>';
     }
-
-    const method = id ? "PUT" : "POST";
-    const url = id ? `/api/schedules/${id}` : "/api/schedules";
-
-    api(method, url, data)
-        .then(() => {
-            bootstrap.Modal.getInstance(document.getElementById("scheduleModal")).hide();
-            showToast(id ? "Planification mise à jour" : "Planification créée");
-            loadSchedules();
-        })
-        .catch((e) => showToast(e.message, "danger"));
+    div.innerHTML = html;
+    content.appendChild(div);
+  });
 }
 
-function toggleSchedule(id, enabled) {
-    api("PUT", `/api/schedules/${id}`, { enabled })
-        .then(() => showToast(enabled ? "Planification activée" : "Planification désactivée"))
-        .catch((e) => showToast(e.message, "danger"));
-}
-
-function deleteSchedule(id) {
-    if (!confirm("Supprimer cette planification ?")) return;
-    api("DELETE", `/api/schedules/${id}`)
-        .then(() => {
-            showToast("Planification supprimée");
-            loadSchedules();
-        })
-        .catch((e) => showToast(e.message, "danger"));
-}
-
-// ──────────────────────────────────────────────
-// SETTINGS
-// ──────────────────────────────────────────────
-function loadSettings() {
-    Promise.all([api("GET", "/api/settings/schema"), api("GET", "/api/settings")]).then(
-        ([schema, values]) => {
-            settingsSchema = schema;
-            settingsValues = values;
-            renderSettingsCategory("ssh");
-            renderSettingsCategory("ldap");
-            renderSettingsCategory("smtp");
-            renderSettingsCategory("general");
-        }
-    );
-}
-
-function renderSettingsCategory(category) {
-    const container = document.getElementById(`settings-${category}-fields`);
-    if (!container || !settingsSchema[category]) return;
-
-    container.innerHTML = settingsSchema[category]
-        .map((field) => {
-            const val = settingsValues[field.key] || "";
-
-            if (field.type === "checkbox") {
-                const checked = val === "true" ? "checked" : "";
-                return `
-                <div class="form-check form-switch mb-3">
-                    <input class="form-check-input" type="checkbox" id="setting-${field.key}" ${checked}
-                           data-setting-key="${field.key}">
-                    <label class="form-check-label" for="setting-${field.key}">${esc(field.label)}</label>
-                </div>`;
-            }
-
-            if (field.type === "textarea") {
-                return `
-                <div class="mb-3">
-                    <label class="form-label" for="setting-${field.key}">${esc(field.label)}</label>
-                    <textarea class="form-control" id="setting-${field.key}" rows="5"
-                              placeholder="${esc(field.placeholder)}"
-                              data-setting-key="${field.key}">${esc(val)}</textarea>
-                    <div class="form-text">Collez votre cle privee SSH ici</div>
-                </div>`;
-            }
-
-            const inputType = field.type === "password" ? "password" : field.type === "number" ? "number" : "text";
-            return `
-            <div class="mb-3">
-                <label class="form-label" for="setting-${field.key}">${esc(field.label)}</label>
-                <input type="${inputType}" class="form-control" id="setting-${field.key}"
-                       placeholder="${esc(field.placeholder)}" value="${esc(val)}"
-                       data-setting-key="${field.key}">
-            </div>`;
-        })
-        .join("");
-}
-
-function collectSettingsCategory(category) {
-    const data = {};
-    if (!settingsSchema[category]) return data;
-
-    settingsSchema[category].forEach((field) => {
-        const el = document.getElementById(`setting-${field.key}`);
-        if (!el) return;
-
-        if (field.type === "checkbox") {
-            data[field.key] = el.checked ? "true" : "false";
-        } else {
-            data[field.key] = el.value;
-        }
-    });
-    return data;
-}
-
-function saveSettings(category) {
-    const data = collectSettingsCategory(category);
-    api("PUT", "/api/settings", data)
-        .then(() => showToast("Paramètres enregistrés"))
-        .catch((e) => showToast(e.message, "danger"));
-}
-
-function testLdap() {
-    const resultEl = document.getElementById("ldap-test-result");
-    resultEl.innerHTML = '<span class="text-muted">Test en cours...</span>';
-
-    // Save first, then test
-    const data = collectSettingsCategory("ldap");
-    api("PUT", "/api/settings", data)
-        .then(() => api("POST", "/api/settings/test-ldap"))
-        .then((r) => {
-            if (r.success) {
-                resultEl.innerHTML = `<span class="text-success"><i class="bi bi-check-circle"></i> ${esc(r.message)}</span>`;
-            } else {
-                resultEl.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle"></i> ${esc(r.message)}</span>`;
-            }
-        })
-        .catch((e) => {
-            resultEl.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle"></i> ${esc(e.message)}</span>`;
-        });
-}
-
-function testSmtp() {
-    const resultEl = document.getElementById("smtp-test-result");
-    resultEl.innerHTML = '<span class="text-muted">Test en cours...</span>';
-
-    const data = collectSettingsCategory("smtp");
-    api("PUT", "/api/settings", data)
-        .then(() => api("POST", "/api/settings/test-smtp"))
-        .then((r) => {
-            if (r.success) {
-                resultEl.innerHTML = `<span class="text-success"><i class="bi bi-check-circle"></i> ${esc(r.message)}</span>`;
-            } else {
-                resultEl.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle"></i> ${esc(r.message)}</span>`;
-            }
-        })
-        .catch((e) => {
-            resultEl.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle"></i> ${esc(e.message)}</span>`;
-        });
-}
-
-// ──────────────────────────────────────────────
-// ADMIN PASSWORD
-// ──────────────────────────────────────────────
-function changeAdminPassword() {
-    const resultEl = document.getElementById("admin-password-result");
-    const current = document.getElementById("admin-current-password").value;
-    const newPw = document.getElementById("admin-new-password").value;
-    const confirm = document.getElementById("admin-confirm-password").value;
-
-    if (!current || !newPw || !confirm) {
-        resultEl.innerHTML = '<span class="text-danger">Tous les champs sont requis.</span>';
-        return;
+async function saveSettings() {
+  const data = {};
+  for (const section of settingsSchema) {
+    for (const field of section.fields) {
+      const el = document.getElementById(`setting-${field.key}`);
+      if (el) data[field.key] = el.value;
     }
-    if (newPw !== confirm) {
-        resultEl.innerHTML = '<span class="text-danger">Les mots de passe ne correspondent pas.</span>';
-        return;
-    }
-
-    resultEl.innerHTML = "";
-
-    api("POST", "/api/auth/change-password", {
-        current_password: current,
-        new_password: newPw,
-        confirm_password: confirm,
-    })
-        .then((r) => {
-            resultEl.innerHTML = `<span class="text-success"><i class="bi bi-check-circle"></i> ${esc(r.message)}</span>`;
-            document.getElementById("admin-current-password").value = "";
-            document.getElementById("admin-new-password").value = "";
-            document.getElementById("admin-confirm-password").value = "";
-        })
-        .catch((e) => {
-            resultEl.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle"></i> ${esc(e.message)}</span>`;
-        });
+  }
+  const res = await api('POST', '/api/settings', data);
+  if (res.ok) toast('Settings saved', 'success');
+  else toast('Failed to save settings', 'error');
 }
 
-// ──────────────────────────────────────────────
-// Utils
-// ──────────────────────────────────────────────
-function esc(str) {
-    if (!str) return "";
-    const div = document.createElement("div");
-    div.textContent = str;
-    return div.innerHTML;
+// ── Modal helpers ─────────────────────────────────────────────────────────────
+
+function showModal(id) {
+  document.getElementById(id).classList.add('show');
 }
 
-// ──────────────────────────────────────────────
-// Init
-// ──────────────────────────────────────────────
-document.addEventListener("DOMContentLoaded", () => {
-    loadDashboard();
+function closeModal(id) {
+  document.getElementById(id).classList.remove('show');
+  if (id === 'output-modal' && outputPollTimer) {
+    clearInterval(outputPollTimer);
+    outputPollTimer = null;
+  }
+  if (id === 'pb-modal' && cmEditor) {
+    cmEditor.toTextArea();
+    cmEditor = null;
+  }
+}
+
+// Click outside to close
+document.addEventListener('click', (e) => {
+  if (e.target.classList.contains('modal-overlay')) {
+    const id = e.target.id;
+    if (id) closeModal(id);
+  }
+});
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function statusBadge(status) {
+  const map = {
+    success: 'badge-success',
+    failed: 'badge-danger',
+    running: 'badge-info',
+    pending: 'badge-warning',
+    cancelled: 'badge-muted',
+  };
+  return map[status] || 'badge-muted';
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', () => {
+  initTheme();
+  showPage('dashboard');
 });

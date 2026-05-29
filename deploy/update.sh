@@ -1,40 +1,30 @@
-#!/usr/bin/env bash
-# ─────────────────────────────────────────────────────────────
-#  Ansible GUI — Script de mise à jour
-#  Usage : sudo bash deploy/update.sh
-# ─────────────────────────────────────────────────────────────
-set -euo pipefail
+#!/bin/bash
+set -e
 
-APP_DIR="/opt/ansible-gui"
-REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-APP_USER="ansible-gui"
+echo "=== Ansible GUI Update ==="
 
-echo "==> Mise à jour d'Ansible GUI"
+APP_DIR=/opt/ansible-gui
 
-echo "[1/5] Installation des dépendances système..."
-apt-get update -q
-apt-get install -y -q libxml2-dev libxslt-dev python3-lxml 2>/dev/null || true
+# Step 1: Pull latest code
+echo "[1/5] Pulling latest code..."
+cd "$APP_DIR"
+git pull
 
-echo "[2/5] Copie des fichiers..."
-rsync -a --exclude='.git' --exclude='venv' --exclude='__pycache__' \
-         --exclude='*.pyc' --exclude='.env' \
-         "$REPO_DIR/" "$APP_DIR/"
-chown -R "$APP_USER:$APP_USER" "$APP_DIR"
+# Step 2: System dependencies
+echo "[2/5] Updating system dependencies..."
+apt-get install -y python3-lxml libxml2-dev libxslt-dev sshpass
 
-echo "[3/5] Mise à jour des dépendances Python..."
-"$APP_DIR/venv/bin/pip" install --quiet -r "$APP_DIR/requirements.txt"
+# Step 3: Python dependencies
+echo "[3/5] Updating Python packages..."
+sudo -u ansible-gui "$APP_DIR/venv/bin/pip" install --upgrade -r requirements.txt
 
-echo "[4/5] Rechargement du service..."
+# Step 4: Restart service
+echo "[4/5] Restarting service..."
 systemctl restart ansible-gui
 
-echo "[5/5] Vérification..."
-sleep 2
-if systemctl is-active --quiet ansible-gui; then
-    echo " ✓ Service actif"
-else
-    echo " ✗ Erreur - vérifiez : journalctl -u ansible-gui -n 50"
-    exit 1
-fi
+# Step 5: Status check
+echo "[5/5] Checking status..."
+systemctl status ansible-gui --no-pager
 
 echo ""
-echo " ✓ Mise à jour terminée !"
+echo "=== Update complete ==="

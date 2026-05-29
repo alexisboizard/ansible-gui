@@ -1,65 +1,59 @@
 import os
-from datetime import timedelta
+import sqlite3
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
 
 
+def _migrate(db_path):
+    """Lightweight schema migration for SQLite."""
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
+
+    migrations = [
+        # Host ping columns
+        "ALTER TABLE host ADD COLUMN reachable BOOLEAN",
+        "ALTER TABLE host ADD COLUMN last_ping DATETIME",
+        "ALTER TABLE host ADD COLUMN ping_latency FLOAT",
+        # Schedule last run columns
+        "ALTER TABLE schedule ADD COLUMN last_run_at DATETIME",
+        "ALTER TABLE schedule ADD COLUMN last_run_status VARCHAR(50)",
+    ]
+
+    for sql in migrations:
+        try:
+            cur.execute(sql)
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
+    conn.commit()
+    conn.close()
+
+
 def create_app():
     app = Flask(__name__)
 
-    app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "change-me-in-production")
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get(
-        "DATABASE_URL", "sqlite:///ansible_gui.db"
-    )
+    instance_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "instance")
+    os.makedirs(instance_path, exist_ok=True)
+
+    db_path = os.path.join(instance_path, "ansible_gui.db")
+    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-
-    # Session config
-    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=8)
-
-    # Ansible working directory
-    app.config["ANSIBLE_WORK_DIR"] = os.environ.get(
-        "ANSIBLE_WORK_DIR", os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
-    )
+    app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", os.urandom(24).hex())
 
     db.init_app(app)
 
-    from app.routes import main_bp, api_bp
-
-    app.register_blueprint(main_bp)
-    app.register_blueprint(api_bp, url_prefix="/api")
-
     with app.app_context():
+        from app import models  # noqa: F401
         db.create_all()
-        _migrate(db)
+        _migrate(db_path)
+        models.Setting.init_defaults()
 
-    from app.scheduler import init_scheduler
+    from app.routes import bp
+    app.register_blueprint(bp)
 
-    init_scheduler(app)
+    from app.scheduler import setup_scheduler
+    setup_scheduler(app)
 
     return app
-
-
-def _migrate(db):
-    """Add missing columns to existing tables (lightweight schema migration)."""
-    import sqlalchemy
-
-    conn = db.engine.connect()
-    migrations = [
-        ("host", "reachable", "BOOLEAN"),
-        ("host", "last_ping", "DATETIME"),
-        ("host", "ping_latency", "FLOAT"),
-        ("schedule", "last_run_at", "DATETIME"),
-        ("schedule", "last_run_status", "VARCHAR(32)"),
-    ]
-    for table, column, col_type in migrations:
-        try:
-            conn.execute(sqlalchemy.text(
-                f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"
-            ))
-            conn.commit()
-        except Exception:
-            # Column already exists — ignore
-            conn.rollback()
-    conn.close()

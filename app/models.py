@@ -1,53 +1,43 @@
-import datetime
+import hashlib
+import os
+from datetime import datetime
 from app import db
 
 
 class Host(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    hostname = db.Column(db.String(255), nullable=False)
-    ip_address = db.Column(db.String(45), nullable=False)
-    port = db.Column(db.Integer, default=22)
-    username = db.Column(db.String(128), default="root")
-    group_name = db.Column(db.String(128), default="all")
+    name = db.Column(db.String(255), nullable=False)
+    address = db.Column(db.String(255), nullable=False)
+    groups = db.Column(db.String(500), default="")
     variables = db.Column(db.Text, default="{}")
-    description = db.Column(db.Text, default="")
-    reachable = db.Column(db.Boolean, default=None, nullable=True)  # None=unknown, True/False
+    os_type = db.Column(db.String(50), default="linux")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    reachable = db.Column(db.Boolean, nullable=True)
     last_ping = db.Column(db.DateTime, nullable=True)
-    ping_latency = db.Column(db.Float, nullable=True)  # ms
-    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
-    updated_at = db.Column(
-        db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
-    )
+    ping_latency = db.Column(db.Float, nullable=True)
 
     def to_dict(self):
         return {
             "id": self.id,
-            "hostname": self.hostname,
-            "ip_address": self.ip_address,
-            "port": self.port,
-            "username": self.username,
-            "group_name": self.group_name,
+            "name": self.name,
+            "address": self.address,
+            "groups": self.groups,
             "variables": self.variables,
-            "description": self.description,
+            "os_type": self.os_type,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
             "reachable": self.reachable,
             "last_ping": self.last_ping.isoformat() if self.last_ping else None,
             "ping_latency": self.ping_latency,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 
 
 class Playbook(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(255), nullable=False)
+    name = db.Column(db.String(255), nullable=False, unique=True)
     description = db.Column(db.Text, default="")
-    content = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
-    updated_at = db.Column(
-        db.DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
-    )
-    executions = db.relationship("Execution", backref="playbook", lazy=True)
-    schedules = db.relationship("Schedule", backref="playbook", lazy=True)
+    content = db.Column(db.Text, default="")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def to_dict(self):
         return {
@@ -62,82 +52,134 @@ class Playbook(db.Model):
 
 class Execution(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    playbook_id = db.Column(db.Integer, db.ForeignKey("playbook.id"), nullable=False)
-    status = db.Column(db.String(32), default="pending")  # pending, running, success, failed
+    playbook_id = db.Column(db.Integer, db.ForeignKey("playbook.id"), nullable=True)
+    playbook_name = db.Column(db.String(255))
+    host_pattern = db.Column(db.String(500), default="all")
+    status = db.Column(db.String(50), default="pending")
     output = db.Column(db.Text, default="")
-    hosts_pattern = db.Column(db.String(255), default="all")
-    started_at = db.Column(db.DateTime)
-    finished_at = db.Column(db.DateTime)
-    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    started_at = db.Column(db.DateTime, default=datetime.utcnow)
+    finished_at = db.Column(db.DateTime, nullable=True)
+    triggered_by = db.Column(db.String(100), default="manual")
 
     def to_dict(self):
         return {
             "id": self.id,
             "playbook_id": self.playbook_id,
-            "playbook_name": self.playbook.name if self.playbook else None,
+            "playbook_name": self.playbook_name,
+            "host_pattern": self.host_pattern,
             "status": self.status,
             "output": self.output,
-            "hosts_pattern": self.hosts_pattern,
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "finished_at": self.finished_at.isoformat() if self.finished_at else None,
+            "triggered_by": self.triggered_by,
+        }
+
+
+class Schedule(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    playbook_id = db.Column(db.Integer, db.ForeignKey("playbook.id"), nullable=False)
+    host_pattern = db.Column(db.String(500), default="all")
+    cron_expr = db.Column(db.String(100), nullable=False)
+    enabled = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    last_run_at = db.Column(db.DateTime, nullable=True)
+    last_run_status = db.Column(db.String(50), nullable=True)
+
+    playbook = db.relationship("Playbook", backref="schedules")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "playbook_id": self.playbook_id,
+            "playbook_name": self.playbook.name if self.playbook else None,
+            "host_pattern": self.host_pattern,
+            "cron_expr": self.cron_expr,
+            "enabled": self.enabled,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "last_run_at": self.last_run_at.isoformat() if self.last_run_at else None,
+            "last_run_status": self.last_run_status,
         }
 
 
 class Setting(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    key = db.Column(db.String(128), unique=True, nullable=False, index=True)
+    key = db.Column(db.String(255), nullable=False, unique=True)
     value = db.Column(db.Text, default="")
-    category = db.Column(db.String(64), default="general")
-
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "key": self.key,
-            "value": self.value,
-            "category": self.category,
-        }
 
     @staticmethod
-    def get(key, default=""):
-        setting = Setting.query.filter_by(key=key).first()
-        return setting.value if setting else default
+    def get(key, default=None):
+        s = Setting.query.filter_by(key=key).first()
+        return s.value if s else default
 
     @staticmethod
-    def set(key, value, category="general"):
-        setting = Setting.query.filter_by(key=key).first()
-        if setting:
-            setting.value = value
+    def set(key, value):
+        s = Setting.query.filter_by(key=key).first()
+        if s:
+            s.value = value
         else:
-            setting = Setting(key=key, value=value, category=category)
-            db.session.add(setting)
+            s = Setting(key=key, value=value)
+            db.session.add(s)
         db.session.commit()
-        return setting
 
+    @staticmethod
+    def init_defaults():
+        from app import db
 
-class Schedule(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    playbook_id = db.Column(db.Integer, db.ForeignKey("playbook.id"), nullable=False)
-    hosts_pattern = db.Column(db.String(255), default="all")
-    cron_expression = db.Column(db.String(128), nullable=False)
-    enabled = db.Column(db.Boolean, default=True)
-    notify_email = db.Column(db.String(255), default="")
-    description = db.Column(db.Text, default="")
-    last_run_at = db.Column(db.DateTime, nullable=True)
-    last_run_status = db.Column(db.String(32), nullable=True)  # success, failed
-    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+        # Create default admin account if not exists
+        admin = LocalUser.query.filter_by(username="admin").first()
+        if not admin:
+            admin = LocalUser(username="admin")
+            admin.set_password("admin")
+            db.session.add(admin)
+            db.session.commit()
 
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "playbook_id": self.playbook_id,
-            "playbook_name": self.playbook.name if self.playbook else None,
-            "hosts_pattern": self.hosts_pattern,
-            "cron_expression": self.cron_expression,
-            "enabled": self.enabled,
-            "notify_email": self.notify_email,
-            "description": self.description,
-            "last_run_at": self.last_run_at.isoformat() if self.last_run_at else None,
-            "last_run_status": self.last_run_status,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+        defaults = {
+            "auth_mode": "local",
+            "ldap_server": "",
+            "ldap_port": "389",
+            "ldap_base_dn": "",
+            "ldap_bind_dn": "",
+            "ldap_bind_password": "",
+            "ldap_user_filter": "(sAMAccountName={username})",
+            "ldap_use_ssl": "false",
+            "smtp_host": "",
+            "smtp_port": "587",
+            "smtp_user": "",
+            "smtp_password": "",
+            "smtp_from": "",
+            "smtp_tls": "true",
+            "notify_on_failure": "true",
+            "notify_on_success": "false",
+            "notify_emails": "",
+            "ping_interval": "300",
+            "ping_timeout": "2",
+            "ssh_private_key": "",
+            "ssh_default_user": "ansible",
+            "ssh_default_password": "",
         }
+        for key, val in defaults.items():
+            if Setting.query.filter_by(key=key).first() is None:
+                db.session.add(Setting(key=key, value=val))
+        db.session.commit()
+
+
+class LocalUser(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(100), nullable=False, unique=True)
+    password_hash = db.Column(db.String(128), nullable=False)
+    salt = db.Column(db.String(32), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def set_password(self, password):
+        self.salt = os.urandom(16).hex()
+        self.password_hash = hashlib.sha256(
+            (self.salt + password).encode()
+        ).hexdigest()
+
+    def check_password(self, password):
+        expected = hashlib.sha256(
+            (self.salt + password).encode()
+        ).hexdigest()
+        return expected == self.password_hash

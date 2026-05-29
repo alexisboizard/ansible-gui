@@ -2,6 +2,7 @@ import csv
 import io
 import json
 import threading
+import zipfile
 from datetime import datetime
 
 from flask import (
@@ -342,6 +343,111 @@ def api_playbooks_delete(pb_id):
     db.session.delete(pb)
     db.session.commit()
     return jsonify({"ok": True})
+
+
+@bp.route("/api/playbooks/<int:pb_id>/export", methods=["GET"])
+@login_required
+def api_playbooks_export_single(pb_id):
+    pb = Playbook.query.get_or_404(pb_id)
+    safe_name = "".join(c if c.isalnum() or c in "-_." else "_" for c in pb.name)
+    return Response(
+        pb.content,
+        mimetype="text/yaml",
+        headers={"Content-Disposition": f"attachment; filename={safe_name}.yml"},
+    )
+
+
+@bp.route("/api/playbooks/export", methods=["GET"])
+@login_required
+def api_playbooks_export_all():
+    """Export all playbooks as a ZIP, organised by folder."""
+    playbooks = Playbook.query.all()
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for pb in playbooks:
+            safe_name = "".join(c if c.isalnum() or c in "-_." else "_" for c in pb.name)
+            if pb.folder:
+                safe_folder = "".join(c if c.isalnum() or c in "-_." else "_" for c in pb.folder.name)
+                path = f"{safe_folder}/{safe_name}.yml"
+            else:
+                path = f"{safe_name}.yml"
+            zf.writestr(path, pb.content)
+    buf.seek(0)
+    return Response(
+        buf.getvalue(),
+        mimetype="application/zip",
+        headers={"Content-Disposition": "attachment; filename=playbooks.zip"},
+    )
+
+
+@bp.route("/api/playbooks/import", methods=["POST"])
+@login_required
+def api_playbooks_import():
+    """Import playbooks from .yml/.yaml files or a .zip archive."""
+    if "file" not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+
+    f = request.files["file"]
+    filename = f.filename or ""
+    imported = 0
+    updated = 0
+
+    def _upsert(name, content, folder_id=None):
+        nonlocal imported, updated
+        name = name.strip()
+        if not name:
+            return
+        existing = Playbook.query.filter_by(name=name).first()
+        if existing:
+            existing.content = content
+            if folder_id is not None:
+                existing.folder_id = folder_id
+            from datetime import datetime
+            existing.updated_at = datetime.utcnow()
+            updated += 1
+        else:
+            db.session.add(Playbook(name=name, content=content, folder_id=folder_id))
+            imported += 1
+
+    def _get_or_create_folder(name):
+        name = name.strip()
+        if not name:
+            return None
+        folder = Folder.query.filter_by(name=name).first()
+        if not folder:
+            folder = Folder(name=name)
+            db.session.add(folder)
+            db.session.flush()
+        return folder.id
+
+    if filename.lower().endswith(".zip"):
+        data = f.read()
+        try:
+            with zipfile.ZipFile(io.BytesIO(data)) as zf:
+                for entry in zf.namelist():
+                    if entry.endswith("/") or not entry.lower().endswith((".yml", ".yaml")):
+                        continue
+                    parts = entry.replace("\\", "/").split("/")
+                    raw_name = parts[-1]
+                    pb_name = raw_name.rsplit(".", 1)[0]
+                    folder_id = None
+                    if len(parts) > 1:
+                        folder_id = _get_or_create_folder(parts[-2])
+                    content = zf.read(entry).decode("utf-8")
+                    _upsert(pb_name, content, folder_id)
+        except zipfile.BadZipFile:
+            return jsonify({"error": "Invalid ZIP file"}), 400
+
+    elif filename.lower().endswith((".yml", ".yaml")):
+        pb_name = filename.rsplit(".", 1)[0]
+        content = f.read().decode("utf-8")
+        _upsert(pb_name, content)
+
+    else:
+        return jsonify({"error": "Unsupported file type. Use .yml, .yaml or .zip"}), 400
+
+    db.session.commit()
+    return jsonify({"ok": True, "imported": imported, "updated": updated})
 
 
 # ──────────────────── EXECUTIONS ────────────────────

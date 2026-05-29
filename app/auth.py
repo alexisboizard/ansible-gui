@@ -114,6 +114,16 @@ def _ldap_auth(username, password):
         return False, None
 
 
+def get_role_for_user(username):
+    """Return the role for a username (local DB or LDAP default)."""
+    local = LocalUser.query.filter_by(username=username).first()
+    if local:
+        return local.role or "admin"
+    # LDAP user — use configured default role
+    from app.models import Setting
+    return Setting.get("ldap_default_role", "admin") or "admin"
+
+
 def login_required(f):
     from functools import wraps
     from flask import redirect, url_for
@@ -122,6 +132,22 @@ def login_required(f):
     def decorated(*args, **kwargs):
         if not session.get("user"):
             return redirect(url_for("main.login_page"))
+        return f(*args, **kwargs)
+
+    return decorated
+
+
+def admin_required(f):
+    from functools import wraps
+    from flask import jsonify
+
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("user"):
+            from flask import redirect, url_for
+            return redirect(url_for("main.login_page"))
+        if session.get("role") != "admin":
+            return jsonify({"error": "Admin access required"}), 403
         return f(*args, **kwargs)
 
     return decorated

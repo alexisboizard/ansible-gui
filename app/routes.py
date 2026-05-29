@@ -17,7 +17,7 @@ from flask import (
 )
 
 from app import db
-from app.auth import authenticate, login_required
+from app.auth import authenticate, login_required, admin_required, get_role_for_user
 from app.models import Execution, Folder, Host, LocalUser, Playbook, Schedule, Setting
 
 bp = Blueprint("main", __name__)
@@ -38,6 +38,8 @@ SETTINGS_SCHEMA = [
             {"key": "ldap_user_filter", "label": "User Filter", "type": "text"},
             {"key": "ldap_use_ssl", "label": "Use SSL/TLS", "type": "select",
              "options": [("false", "No"), ("true", "Yes")]},
+            {"key": "ldap_default_role", "label": "Default Role for LDAP Users", "type": "select",
+             "options": [("admin", "Admin"), ("readonly", "Read Only")]},
         ],
     },
     {
@@ -95,6 +97,7 @@ def api_login():
     ok, user = authenticate(username, password)
     if ok:
         session["user"] = user
+        session["role"] = get_role_for_user(user)
         return jsonify({"ok": True})
     return jsonify({"ok": False, "error": "Invalid credentials"}), 401
 
@@ -102,7 +105,14 @@ def api_login():
 @bp.route("/api/logout", methods=["POST"])
 def api_logout():
     session.pop("user", None)
+    session.pop("role", None)
     return jsonify({"ok": True})
+
+
+@bp.route("/api/me", methods=["GET"])
+@login_required
+def api_me():
+    return jsonify({"username": session.get("user"), "role": session.get("role", "admin")})
 
 
 @bp.route("/")
@@ -149,7 +159,7 @@ def api_hosts():
 
 
 @bp.route("/api/hosts", methods=["POST"])
-@login_required
+@admin_required
 def api_hosts_create():
     data = request.get_json() or {}
     host = Host(
@@ -165,7 +175,7 @@ def api_hosts_create():
 
 
 @bp.route("/api/hosts/<int:host_id>", methods=["PUT"])
-@login_required
+@admin_required
 def api_hosts_update(host_id):
     host = Host.query.get_or_404(host_id)
     data = request.get_json() or {}
@@ -179,7 +189,7 @@ def api_hosts_update(host_id):
 
 
 @bp.route("/api/hosts/<int:host_id>", methods=["DELETE"])
-@login_required
+@admin_required
 def api_hosts_delete(host_id):
     host = Host.query.get_or_404(host_id)
     db.session.delete(host)
@@ -221,7 +231,7 @@ def api_hosts_export():
 
 
 @bp.route("/api/hosts/import", methods=["POST"])
-@login_required
+@admin_required
 def api_hosts_import():
     if "file" not in request.files:
         return jsonify({"error": "No file provided"}), 400
@@ -264,7 +274,7 @@ def api_folders():
 
 
 @bp.route("/api/folders", methods=["POST"])
-@login_required
+@admin_required
 def api_folders_create():
     data = request.get_json() or {}
     name = data.get("name", "").strip()
@@ -279,7 +289,7 @@ def api_folders_create():
 
 
 @bp.route("/api/folders/<int:folder_id>", methods=["PUT"])
-@login_required
+@admin_required
 def api_folders_update(folder_id):
     folder = Folder.query.get_or_404(folder_id)
     data = request.get_json() or {}
@@ -292,7 +302,7 @@ def api_folders_update(folder_id):
 
 
 @bp.route("/api/folders/<int:folder_id>", methods=["DELETE"])
-@login_required
+@admin_required
 def api_folders_delete(folder_id):
     folder = Folder.query.get_or_404(folder_id)
     # Unassign playbooks from this folder instead of deleting them
@@ -313,7 +323,7 @@ def api_playbooks():
 
 
 @bp.route("/api/playbooks", methods=["POST"])
-@login_required
+@admin_required
 def api_playbooks_create():
     data = request.get_json() or {}
     folder_id = data.get("folder_id") or None
@@ -329,7 +339,7 @@ def api_playbooks_create():
 
 
 @bp.route("/api/playbooks/<int:pb_id>", methods=["PUT"])
-@login_required
+@admin_required
 def api_playbooks_update(pb_id):
     pb = Playbook.query.get_or_404(pb_id)
     data = request.get_json() or {}
@@ -343,7 +353,7 @@ def api_playbooks_update(pb_id):
 
 
 @bp.route("/api/playbooks/<int:pb_id>", methods=["DELETE"])
-@login_required
+@admin_required
 def api_playbooks_delete(pb_id):
     pb = Playbook.query.get_or_404(pb_id)
     db.session.delete(pb)
@@ -387,7 +397,7 @@ def api_playbooks_export_all():
 
 
 @bp.route("/api/playbooks/import", methods=["POST"])
-@login_required
+@admin_required
 def api_playbooks_import():
     """Import playbooks from .yml/.yaml files or a .zip archive."""
     if "file" not in request.files:
@@ -473,7 +483,7 @@ def api_executions_get(exec_id):
 
 
 @bp.route("/api/executions", methods=["POST"])
-@login_required
+@admin_required
 def api_executions_create():
     from app.runner import run_playbook
 
@@ -505,7 +515,7 @@ def api_executions_create():
 
 
 @bp.route("/api/executions/<int:exec_id>/cancel", methods=["POST"])
-@login_required
+@admin_required
 def api_executions_cancel(exec_id):
     execution = Execution.query.get_or_404(exec_id)
     if execution.status in ("pending", "running"):
@@ -517,7 +527,7 @@ def api_executions_cancel(exec_id):
 
 
 @bp.route("/api/executions/purge", methods=["POST"])
-@login_required
+@admin_required
 def api_executions_purge():
     Execution.query.delete()
     db.session.commit()
@@ -540,7 +550,7 @@ def api_schedules():
 
 
 @bp.route("/api/schedules", methods=["POST"])
-@login_required
+@admin_required
 def api_schedules_create():
     from app.scheduler import register_schedule
     data = request.get_json() or {}
@@ -562,7 +572,7 @@ def api_schedules_create():
 
 
 @bp.route("/api/schedules/<int:sched_id>", methods=["PUT"])
-@login_required
+@admin_required
 def api_schedules_update(sched_id):
     from app.scheduler import register_schedule
     schedule = Schedule.query.get_or_404(sched_id)
@@ -578,7 +588,7 @@ def api_schedules_update(sched_id):
 
 
 @bp.route("/api/schedules/<int:sched_id>", methods=["DELETE"])
-@login_required
+@admin_required
 def api_schedules_delete(sched_id):
     from app.scheduler import unregister_schedule
     schedule = Schedule.query.get_or_404(sched_id)
@@ -606,7 +616,7 @@ def api_settings_get():
 
 
 @bp.route("/api/settings", methods=["POST"])
-@login_required
+@admin_required
 def api_settings_save():
     data = request.get_json() or {}
     for key, value in data.items():
@@ -629,49 +639,65 @@ def api_settings_schema():
 def api_users():
     users = LocalUser.query.order_by(LocalUser.id).all()
     return jsonify([
-        {"id": u.id, "username": u.username, "created_at": u.created_at.isoformat() if u.created_at else None}
+        {"id": u.id, "username": u.username, "role": u.role or "admin",
+         "created_at": u.created_at.isoformat() if u.created_at else None}
         for u in users
     ])
 
 
 @bp.route("/api/users", methods=["POST"])
-@login_required
+@admin_required
 def api_users_create():
     data = request.get_json() or {}
     username = data.get("username", "").strip()
     password = data.get("password", "")
+    role = data.get("role", "admin")
+    if role not in ("admin", "readonly"):
+        role = "admin"
     if not username:
         return jsonify({"error": "Username is required"}), 400
     if not password:
         return jsonify({"error": "Password is required"}), 400
     if LocalUser.query.filter_by(username=username).first():
         return jsonify({"error": "Username already exists"}), 409
-    user = LocalUser(username=username)
+    user = LocalUser(username=username, role=role)
     user.set_password(password)
     db.session.add(user)
     db.session.commit()
-    return jsonify({"id": user.id, "username": user.username, "created_at": user.created_at.isoformat() if user.created_at else None}), 201
+    return jsonify({"id": user.id, "username": user.username, "role": user.role,
+                    "created_at": user.created_at.isoformat() if user.created_at else None}), 201
 
 
 @bp.route("/api/users/<int:user_id>", methods=["PUT"])
-@login_required
+@admin_required
 def api_users_update(user_id):
     user = LocalUser.query.get_or_404(user_id)
     data = request.get_json() or {}
     password = data.get("password", "")
-    if not password:
-        return jsonify({"error": "Password is required"}), 400
-    user.set_password(password)
+    role = data.get("role")
+    if password:
+        user.set_password(password)
+    if role in ("admin", "readonly"):
+        # Prevent demoting the last admin
+        if role == "readonly" and user.role == "admin":
+            admin_count = LocalUser.query.filter_by(role="admin").count()
+            if admin_count <= 1:
+                return jsonify({"error": "Cannot demote the last admin"}), 400
+        user.role = role
+    if not password and not role:
+        return jsonify({"error": "Nothing to update"}), 400
     db.session.commit()
     return jsonify({"ok": True})
 
 
 @bp.route("/api/users/<int:user_id>", methods=["DELETE"])
-@login_required
+@admin_required
 def api_users_delete(user_id):
     user = LocalUser.query.get_or_404(user_id)
     if LocalUser.query.count() <= 1:
         return jsonify({"error": "Cannot delete the last user"}), 400
+    if user.role == "admin" and LocalUser.query.filter_by(role="admin").count() <= 1:
+        return jsonify({"error": "Cannot delete the last admin user"}), 400
     db.session.delete(user)
     db.session.commit()
     return jsonify({"ok": True})

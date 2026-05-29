@@ -150,12 +150,13 @@ function renderHosts() {
       <td>${h.last_ping ? fmtDate(h.last_ping) : '<span style="color:var(--text-muted)">Never</span>'}</td>
       <td>
         <div style="display:flex;gap:4px">
+          ${isAdmin() ? `
           <button class="btn btn-icon btn-sm" title="Edit" onclick="openHostModal(${h.id})">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           </button>
           <button class="btn btn-icon btn-sm" title="Delete" onclick="deleteHost(${h.id})" style="color:var(--danger);border-color:rgba(245,54,92,0.3)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-          </button>
+          </button>` : '<span style="color:var(--text-muted);font-size:11px">—</span>'}
         </div>
       </td>
     `;
@@ -414,18 +415,18 @@ function renderPlaybooks() {
             <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${p.description || 'No description'}</div>
           </div>
           <div style="display:flex;gap:4px;flex-shrink:0">
-            <button class="btn btn-icon btn-sm" title="Edit" onclick="openPlaybookModal(${p.id})">
+            ${isAdmin() ? `<button class="btn btn-icon btn-sm" title="Edit" onclick="openPlaybookModal(${p.id})">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            </button>
+            </button>` : ''}
             <button class="btn btn-icon btn-sm" title="Export .yml" onclick="exportPlaybook(${p.id})">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             </button>
-            <button class="btn btn-icon btn-sm" title="Run" onclick="openRunModal(${p.id})" style="color:var(--success);border-color:rgba(39,217,108,0.3)">
+            ${isAdmin() ? `<button class="btn btn-icon btn-sm" title="Run" onclick="openRunModal(${p.id})" style="color:var(--success);border-color:rgba(39,217,108,0.3)">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             </button>
             <button class="btn btn-icon btn-sm" title="Delete" onclick="deletePlaybook(${p.id})" style="color:var(--danger);border-color:rgba(245,54,92,0.3)">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
-            </button>
+            </button>` : ''}
           </div>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between">
@@ -673,7 +674,7 @@ function renderExecutions(executions) {
           <button class="btn btn-icon btn-sm" title="View output" onclick="openOutputModal(${e.id})">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
           </button>
-          ${(e.status === 'running' || e.status === 'pending') ? `
+          ${isAdmin() && (e.status === 'running' || e.status === 'pending') ? `
           <button class="btn btn-icon btn-sm" title="Cancel" onclick="cancelExecution(${e.id})" style="color:var(--warning)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
           </button>` : ''}
@@ -760,12 +761,13 @@ function renderSchedules() {
       <td>${s.next_run_at ? fmtDate(s.next_run_at) : '<span style="color:var(--text-muted)">—</span>'}</td>
       <td>
         <div style="display:flex;gap:4px">
+          ${isAdmin() ? `
           <button class="btn btn-icon btn-sm" onclick="openScheduleModal(${s.id})">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           </button>
           <button class="btn btn-icon btn-sm" onclick="deleteSchedule(${s.id})" style="color:var(--danger);border-color:rgba(245,54,92,0.3)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
-          </button>
+          </button>` : '<span style="color:var(--text-muted);font-size:11px">—</span>'}
         </div>
       </td>
     `;
@@ -989,10 +991,11 @@ function renderUsers() {
     tr.innerHTML = `
       <td>${u.id}</td>
       <td><strong>${u.username}</strong></td>
+      <td><span class="badge ${u.role === 'admin' ? 'badge-info' : 'badge-muted'}">${u.role || 'admin'}</span></td>
       <td>${fmtDate(u.created_at)}</td>
       <td>
         <div style="display:flex;gap:4px">
-          <button class="btn btn-icon btn-sm" title="Change password" onclick="openUserModal(${u.id})">
+          <button class="btn btn-icon btn-sm" title="Edit" onclick="openUserModal(${u.id})">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           </button>
           <button class="btn btn-icon btn-sm" title="Delete" onclick="deleteUser(${u.id})" style="color:var(--danger);border-color:rgba(245,54,92,0.3)">
@@ -1007,11 +1010,12 @@ function renderUsers() {
 
 function openUserModal(id = null) {
   const user = id ? usersData.find(u => u.id === id) : null;
-  document.getElementById('user-modal-title').textContent = user ? 'Change Password' : 'New User';
+  document.getElementById('user-modal-title').textContent = user ? 'Edit User' : 'New User';
   document.getElementById('user-id').value = user ? user.id : '';
   document.getElementById('user-username').value = user ? user.username : '';
   document.getElementById('user-username').disabled = !!user;
   document.getElementById('user-username-group').style.display = user ? 'none' : '';
+  document.getElementById('user-role').value = user ? (user.role || 'admin') : 'admin';
   document.getElementById('user-password').value = '';
   document.getElementById('user-password-confirm').value = '';
   showModal('user-modal');
@@ -1021,17 +1025,20 @@ async function saveUser() {
   const id = document.getElementById('user-id').value;
   const password = document.getElementById('user-password').value;
   const confirm = document.getElementById('user-password-confirm').value;
+  const role = document.getElementById('user-role').value;
 
-  if (!password) { toast('Password is required', 'error'); return; }
-  if (password !== confirm) { toast('Passwords do not match', 'error'); return; }
+  if (password && password !== confirm) { toast('Passwords do not match', 'error'); return; }
 
   let res;
   if (id) {
-    res = await api('PUT', `/api/users/${id}`, { password });
+    const payload = { role };
+    if (password) payload.password = password;
+    res = await api('PUT', `/api/users/${id}`, payload);
   } else {
+    if (!password) { toast('Password is required', 'error'); return; }
     const username = document.getElementById('user-username').value.trim();
     if (!username) { toast('Username is required', 'error'); return; }
-    res = await api('POST', '/api/users', { username, password });
+    res = await api('POST', '/api/users', { username, password, role });
   }
 
   if (res.ok) {
@@ -1099,9 +1106,29 @@ function fmtDate(iso) {
   return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
 }
 
+// ── RBAC ──────────────────────────────────────────────────────────────────────
+
+let currentRole = 'admin';
+
+async function initMe() {
+  try {
+    const res = await api('GET', '/api/me');
+    if (res.ok) {
+      const data = await res.json();
+      currentRole = data.role || 'admin';
+      if (currentRole !== 'admin') {
+        document.body.classList.add('role-readonly');
+      }
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function isAdmin() { return currentRole === 'admin'; }
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   initTheme();
+  await initMe();
   showPage('dashboard');
 });

@@ -899,3 +899,6 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   .playbooks-layout { flex-direction: column; }
   .folders-panel { width: 100%; position: static; }
 }
+
+/* RBAC: hide admin-only elements for readonly users */
+.role-readonly .admin-only { display: none !important; }

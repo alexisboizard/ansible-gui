@@ -167,7 +167,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               <input class="form-control" id="host-search" placeholder="Search hosts..." oninput="loadHosts(this.value)">
             </div>
-            <button class="btn btn-secondary" onclick="pingAllHosts()">
+            <button class="btn btn-secondary admin-only" onclick="pingAllHosts()">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
               Ping All
             </button>
@@ -175,11 +175,11 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               Export CSV
             </button>
-            <button class="btn btn-secondary" onclick="openImportModal()">
+            <button class="btn btn-secondary admin-only" onclick="openImportModal()">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
               Import CSV
             </button>
-            <button class="btn btn-primary" onclick="openHostModal()">
+            <button class="btn btn-primary admin-only" onclick="openHostModal()">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               Add Host
             </button>
@@ -213,7 +213,7 @@
         <aside class="folders-panel card">
           <div class="card-header" style="padding:12px 14px">
             <span class="card-title" style="font-size:13px">Folders</span>
-            <button class="btn btn-icon btn-sm" title="New folder" onclick="openFolderModal()">
+            <button class="btn btn-icon btn-sm admin-only" title="New folder" onclick="openFolderModal()">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </button>
           </div>
@@ -225,15 +225,15 @@
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:8px;flex-wrap:wrap">
             <h3 class="card-title" id="playbooks-folder-title" style="margin:0">All Playbooks</h3>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
-              <button class="btn btn-secondary" onclick="exportAllPlaybooks()">
+              <button class="btn btn-secondary admin-only" onclick="exportAllPlaybooks()">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 Export ZIP
               </button>
-              <button class="btn btn-secondary" onclick="openPlaybookImportModal()">
+              <button class="btn btn-secondary admin-only" onclick="openPlaybookImportModal()">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                 Import
               </button>
-              <button class="btn btn-primary" onclick="openPlaybookModal()">
+              <button class="btn btn-primary admin-only" onclick="openPlaybookModal()">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 New Playbook
               </button>
@@ -251,7 +251,7 @@
       <div class="card">
         <div class="card-header">
           <h3 class="card-title">Execution History</h3>
-          <button class="btn btn-danger btn-sm" onclick="purgeExecutions()">
+          <button class="btn btn-danger btn-sm admin-only" onclick="purgeExecutions()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
             Purge All
           </button>
@@ -281,7 +281,7 @@
       <div class="card">
         <div class="card-header">
           <h3 class="card-title">Schedules</h3>
-          <button class="btn btn-primary" onclick="openScheduleModal()">
+          <button class="btn btn-primary admin-only" onclick="openScheduleModal()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             New Schedule
           </button>
@@ -312,7 +312,7 @@
       <div class="card">
         <div class="card-header">
           <h3 class="card-title">Settings</h3>
-          <button class="btn btn-primary" onclick="saveSettings()">
+          <button class="btn btn-primary admin-only" onclick="saveSettings()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
             Save Settings
           </button>
@@ -331,7 +331,7 @@
       <div class="card">
         <div class="card-header">
           <h3 class="card-title">Local Users</h3>
-          <button class="btn btn-primary" onclick="openUserModal()">
+          <button class="btn btn-primary admin-only" onclick="openUserModal()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             New User
           </button>
@@ -342,12 +342,13 @@
               <tr>
                 <th style="width:60px">#</th>
                 <th>Username</th>
+                <th style="width:100px">Role</th>
                 <th>Created</th>
                 <th style="width:100px">Actions</th>
               </tr>
             </thead>
             <tbody id="users-tbody">
-              <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:24px">Loading...</td></tr>
+              <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:24px">Loading...</td></tr>
             </tbody>
           </table>
         </div>
@@ -702,7 +703,14 @@
         <input type="text" class="form-control" id="user-username" placeholder="john.doe">
       </div>
       <div class="form-group">
-        <label class="form-label">Password</label>
+        <label class="form-label">Role</label>
+        <select class="form-control" id="user-role">
+          <option value="admin">Admin — full access</option>
+          <option value="readonly">Read Only — view only, no actions</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password <span style="color:var(--text-muted);font-weight:400;text-transform:none">(leave empty to keep current)</span></label>
         <input type="password" class="form-control" id="user-password" placeholder="••••••••">
       </div>
       <div class="form-group" style="margin-bottom:0">

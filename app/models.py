@@ -165,6 +165,7 @@ class Setting(db.Model):
 
         defaults = {
             "auth_mode": "local",
+            "ldap_default_role": "admin",
             "ldap_server": "",
             "ldap_port": "389",
             "ldap_base_dn": "",
@@ -198,6 +199,7 @@ class LocalUser(db.Model):
     username = db.Column(db.String(100), nullable=False, unique=True)
     password_hash = db.Column(db.String(128), nullable=False)
     salt = db.Column(db.String(32), nullable=False)
+    role = db.Column(db.String(20), default="admin")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def set_password(self, password):

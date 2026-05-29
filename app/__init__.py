@@ -109,6 +109,14 @@ def _migrate(db_path):
     if "folder_id" not in playbook_cols:
         migrations.append("ALTER TABLE playbook ADD COLUMN folder_id INTEGER REFERENCES folder(id)")
 
+    # LocalUser role column
+    try:
+        user_cols = _get_columns(cur, "local_user")
+        if "role" not in user_cols:
+            migrations.append("ALTER TABLE local_user ADD COLUMN role VARCHAR(20) DEFAULT 'admin'")
+    except Exception:
+        pass
+
     for sql in migrations:
         try:
             cur.execute(sql)

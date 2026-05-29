@@ -162,6 +162,11 @@ function renderHosts() {
   }
 }
 
+function onOsTypeChange() {
+  const isWindows = document.getElementById('host-os').value === 'windows';
+  document.getElementById('host-port-group').style.display = isWindows ? '' : 'none';
+}
+
 function openHostModal(id = null) {
   const host = id ? hostsData.find(h => h.id === id) : null;
   document.getElementById('host-modal-title').textContent = host ? 'Edit Host' : 'Add Host';
@@ -171,25 +176,63 @@ function openHostModal(id = null) {
   document.getElementById('host-groups').value = host ? (host.groups || '') : '';
   document.getElementById('host-os').value = host ? (host.os_type || 'linux') : 'linux';
 
+  // Extract known fields from variables, leave the rest in the JSON box
   let vars = {};
   if (host) { try { vars = JSON.parse(host.variables || '{}'); } catch(e) {} }
-  document.getElementById('host-vars').value = JSON.stringify(vars, null, 2);
 
+  document.getElementById('host-username').value = vars.ansible_user || '';
+  document.getElementById('host-password').value = vars.ansible_password || '';
+  document.getElementById('host-port').value = vars.ansible_port || '';
+
+  // Remove fields that now have dedicated inputs before showing in JSON box
+  const extra = Object.assign({}, vars);
+  delete extra.ansible_user;
+  delete extra.ansible_password;
+  delete extra.ansible_port;
+  // For Windows, keep winrm vars visible in extra if present
+  document.getElementById('host-vars').value = Object.keys(extra).length
+    ? JSON.stringify(extra, null, 2)
+    : '';
+
+  onOsTypeChange();
   showModal('host-modal');
 }
 
 async function saveHost() {
   const id = document.getElementById('host-id').value;
+  const osType = document.getElementById('host-os').value;
+
+  // Start with extra JSON vars
   let vars = {};
-  try { vars = JSON.parse(document.getElementById('host-vars').value || '{}'); } catch(e) {
-    toast('Invalid JSON in variables', 'error'); return;
+  const extraRaw = document.getElementById('host-vars').value.trim();
+  if (extraRaw) {
+    try { vars = JSON.parse(extraRaw); } catch(e) {
+      toast('Invalid JSON in extra variables', 'error'); return;
+    }
+  }
+
+  // Inject dedicated fields
+  const username = document.getElementById('host-username').value.trim();
+  const password = document.getElementById('host-password').value;
+  const port = document.getElementById('host-port').value.trim();
+
+  if (username) vars.ansible_user = username;
+  if (password) vars.ansible_password = password;
+  if (port) vars.ansible_port = parseInt(port);
+
+  // Auto-inject WinRM settings for Windows if not already set
+  if (osType === 'windows') {
+    if (!vars.ansible_connection) vars.ansible_connection = 'winrm';
+    if (!vars.ansible_winrm_transport) vars.ansible_winrm_transport = 'ntlm';
+    if (!vars.ansible_shell_type) vars.ansible_shell_type = 'powershell';
+    if (!vars.ansible_port) vars.ansible_port = 5985;
   }
 
   const data = {
     name: document.getElementById('host-name').value.trim(),
     address: document.getElementById('host-address').value.trim(),
     groups: document.getElementById('host-groups').value.trim(),
-    os_type: document.getElementById('host-os').value,
+    os_type: osType,
     variables: vars,
   };
 

@@ -351,14 +351,28 @@
       </div>
       <div class="form-group">
         <label class="form-label">OS Type</label>
-        <select class="form-control" id="host-os">
+        <select class="form-control" id="host-os" onchange="onOsTypeChange()">
           <option value="linux">Linux</option>
           <option value="windows">Windows</option>
         </select>
       </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="form-group">
+          <label class="form-label">Username <span style="color:var(--text-muted);font-weight:400;text-transform:none">(leave empty = global default)</span></label>
+          <input type="text" class="form-control" id="host-username" placeholder="ansible">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password <span style="color:var(--text-muted);font-weight:400;text-transform:none">(leave empty = global default)</span></label>
+          <input type="password" class="form-control" id="host-password" placeholder="••••••••">
+        </div>
+      </div>
+      <div class="form-group" id="host-port-group" style="display:none">
+        <label class="form-label">WinRM Port</label>
+        <input type="text" class="form-control" id="host-port" placeholder="5985">
+      </div>
       <div class="form-group">
-        <label class="form-label">Variables (JSON)</label>
-        <textarea class="form-control" id="host-vars" rows="5" placeholder='{"ansible_user": "admin"}'></textarea>
+        <label class="form-label">Extra Variables (JSON)</label>
+        <textarea class="form-control" id="host-vars" rows="4" placeholder='{"ansible_become": true}'></textarea>
       </div>
     </div>
     <div class="modal-footer">

@@ -4,7 +4,7 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - ./data:/app/data
-    env_file:
-      - .env
+      - ./data:/app/instance   # persists the SQLite database
+    environment:
+      - SECRET_KEY=${SECRET_KEY:-changeme-in-production}
     restart: unless-stopped

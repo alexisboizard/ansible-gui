@@ -866,6 +866,7 @@ function renderSettings() {
     let html = `<h3 style="font-size:15px;font-weight:600;margin:0 0 16px">${section.label}</h3>`;
     for (const field of section.fields) {
       const val = settingsData[field.key] || '';
+      const hint = field.hint ? `<div style="font-size:11px;color:var(--text-muted);margin-top:4px">${field.hint}</div>` : '';
       html += `<div class="form-group">
         <label class="form-label">${field.label}</label>`;
 
@@ -881,7 +882,7 @@ function renderSettings() {
         const inputType = field.type === 'password' ? 'password' : 'text';
         html += `<input type="${inputType}" class="form-control" id="setting-${field.key}" value="${val}" placeholder="${field.label}">`;
       }
-      html += '</div>';
+      html += hint + '</div>';
     }
     div.innerHTML = html;
     content.appendChild(div);

@@ -27,14 +27,13 @@ SENSITIVE_KEYS = {"ldap_bind_password", "smtp_password", "ssh_private_key", "ssh
 SETTINGS_SCHEMA = [
     {
         "category": "auth",
-        "label": "Authentication",
+        "label": "Authentication (LDAP + Local)",
         "fields": [
-            {"key": "auth_mode", "label": "Auth Mode", "type": "select",
-             "options": [("local", "Local"), ("ldap", "LDAP / Active Directory")]},
-            {"key": "ldap_server", "label": "LDAP Server", "type": "text"},
+            {"key": "ldap_server", "label": "LDAP Server", "type": "text",
+             "hint": "Leave empty to use local auth only. If set, LDAP is tried first, then local."},
             {"key": "ldap_port", "label": "LDAP Port", "type": "text"},
             {"key": "ldap_base_dn", "label": "Base DN", "type": "text"},
-            {"key": "ldap_bind_dn", "label": "Bind DN", "type": "text"},
+            {"key": "ldap_bind_dn", "label": "Bind DN (service account)", "type": "text"},
             {"key": "ldap_bind_password", "label": "Bind Password", "type": "password"},
             {"key": "ldap_user_filter", "label": "User Filter", "type": "text"},
             {"key": "ldap_use_ssl", "label": "Use SSL/TLS", "type": "select",

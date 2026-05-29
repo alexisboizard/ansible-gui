@@ -311,6 +311,7 @@ function renderPlaybooks() {
 
 function openPlaybookModal(id = null) {
   const pb = id ? playbooksData.find(p => p.id === id) : null;
+  const newContent = pb ? pb.content : defaultPlaybook;
 
   document.getElementById('pb-modal-title').textContent = pb ? 'Edit Playbook' : 'New Playbook';
   document.getElementById('pb-id').value = pb ? pb.id : '';
@@ -324,7 +325,7 @@ function openPlaybookModal(id = null) {
   }
 
   const textarea = document.getElementById('pb-content');
-  textarea.value = pb ? pb.content : defaultPlaybook;
+  textarea.value = newContent;
 
   showModal('pb-modal');
 
@@ -343,7 +344,10 @@ function openPlaybookModal(id = null) {
         matchBrackets: true,
         extraKeys: { Tab: (cm) => cm.replaceSelection('  ') },
       });
+      // Force set the value to ensure correct content
+      cmEditor.setValue(newContent);
       cmEditor.refresh();
+      cmEditor.clearHistory();
     });
   });
 }

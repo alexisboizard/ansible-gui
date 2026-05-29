@@ -6,28 +6,87 @@ from flask_sqlalchemy import SQLAlchemy
 db = SQLAlchemy()
 
 
+def _get_columns(cur, table):
+    cur.execute(f"PRAGMA table_info({table})")
+    return {row[1] for row in cur.fetchall()}
+
+
 def _migrate(db_path):
     """Lightweight schema migration for SQLite."""
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
 
-    migrations = [
-        # Host ping columns
-        "ALTER TABLE host ADD COLUMN reachable BOOLEAN",
-        "ALTER TABLE host ADD COLUMN last_ping DATETIME",
-        "ALTER TABLE host ADD COLUMN ping_latency FLOAT",
-        # Schedule last run columns
-        "ALTER TABLE schedule ADD COLUMN last_run_at DATETIME",
-        "ALTER TABLE schedule ADD COLUMN last_run_status VARCHAR(50)",
-        # Playbook folder
-        "ALTER TABLE playbook ADD COLUMN folder_id INTEGER REFERENCES folder(id)",
-    ]
+    # ── Host table: detect old schema and rebuild ──────────────────────────────
+    # Old schema used: hostname, ip_address, port, username, group_name, description
+    # New schema uses: name, address, groups, variables, os_type
+    host_cols = _get_columns(cur, "host")
+    if "hostname" in host_cols and "name" not in host_cols:
+        # Migrate old host table to new schema
+        cur.executescript("""
+            CREATE TABLE IF NOT EXISTS host_new (
+                id INTEGER PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                address VARCHAR(255) NOT NULL,
+                groups VARCHAR(500) DEFAULT '',
+                variables TEXT DEFAULT '{}',
+                os_type VARCHAR(50) DEFAULT 'linux',
+                created_at DATETIME,
+                reachable BOOLEAN,
+                last_ping DATETIME,
+                ping_latency FLOAT
+            );
+
+            INSERT INTO host_new (id, name, address, groups, variables, os_type, created_at)
+            SELECT
+                id,
+                hostname,
+                ip_address,
+                COALESCE(group_name, ''),
+                CASE
+                    WHEN username IS NOT NULL AND username != ''
+                    THEN json_object('ansible_user', username)
+                    ELSE '{}'
+                END,
+                'linux',
+                CURRENT_TIMESTAMP
+            FROM host;
+
+            DROP TABLE host;
+            ALTER TABLE host_new RENAME TO host;
+        """)
+        conn.commit()
+
+    # ── Standard ADD COLUMN migrations ────────────────────────────────────────
+    host_cols = _get_columns(cur, "host")
+    playbook_cols = _get_columns(cur, "playbook")
+
+    migrations = []
+
+    if "reachable" not in host_cols:
+        migrations.append("ALTER TABLE host ADD COLUMN reachable BOOLEAN")
+    if "last_ping" not in host_cols:
+        migrations.append("ALTER TABLE host ADD COLUMN last_ping DATETIME")
+    if "ping_latency" not in host_cols:
+        migrations.append("ALTER TABLE host ADD COLUMN ping_latency FLOAT")
+
+    # Schedule columns
+    try:
+        sched_cols = _get_columns(cur, "schedule")
+        if "last_run_at" not in sched_cols:
+            migrations.append("ALTER TABLE schedule ADD COLUMN last_run_at DATETIME")
+        if "last_run_status" not in sched_cols:
+            migrations.append("ALTER TABLE schedule ADD COLUMN last_run_status VARCHAR(50)")
+    except Exception:
+        pass
+
+    if "folder_id" not in playbook_cols:
+        migrations.append("ALTER TABLE playbook ADD COLUMN folder_id INTEGER REFERENCES folder(id)")
 
     for sql in migrations:
         try:
             cur.execute(sql)
         except sqlite3.OperationalError:
-            pass  # Column already exists
+            pass
 
     conn.commit()
     conn.close()

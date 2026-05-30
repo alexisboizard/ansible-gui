@@ -2,17 +2,20 @@
 
 // ── Theme ────────────────────────────────────────────────────────────────────
 
+let userThemePreference = 'system'; // Track user preference from server
+
 function initTheme() {
+  // First use localStorage as fallback (for non-authenticated pages)
   const saved = localStorage.getItem('theme');
   if (saved) {
-    applyTheme(saved);
+    applyThemeVisual(saved);
   } else {
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    applyTheme(prefersDark ? 'dark' : 'light');
+    applyThemeVisual(prefersDark ? 'dark' : 'light');
   }
 }
 
-function applyTheme(theme) {
+function applyThemeVisual(theme) {
   const html = document.documentElement;
   html.classList.remove('dark-theme', 'light-theme');
   html.classList.add(theme === 'light' ? 'light-theme' : 'dark-theme');
@@ -20,9 +23,28 @@ function applyTheme(theme) {
   updateThemeIcon();
 }
 
-function toggleTheme() {
+function applyThemeFromPreference(preference) {
+  userThemePreference = preference;
+  let effectiveTheme = preference;
+  if (preference === 'system') {
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    effectiveTheme = prefersDark ? 'dark' : 'light';
+  }
+  applyThemeVisual(effectiveTheme);
+}
+
+async function toggleTheme() {
   const isLight = document.documentElement.classList.contains('light-theme');
-  applyTheme(isLight ? 'dark' : 'light');
+  const newTheme = isLight ? 'dark' : 'light';
+  applyThemeVisual(newTheme);
+
+  // Save to server for logged-in users
+  try {
+    await api('PUT', '/api/me/preferences', { theme: newTheme });
+    userThemePreference = newTheme;
+  } catch (e) {
+    // Fallback to localStorage only
+  }
 }
 
 function updateThemeIcon() {
@@ -1661,6 +1683,10 @@ async function initMe() {
       currentRole = data.role || 'admin';
       if (currentRole !== 'admin') {
         document.body.classList.add('role-readonly');
+      }
+      // Apply theme from user preferences
+      if (data.theme_preference) {
+        applyThemeFromPreference(data.theme_preference);
       }
     }
   } catch (e) { /* ignore */ }

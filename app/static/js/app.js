@@ -1013,6 +1013,7 @@ function openRunModal(pbId) {
   document.getElementById('run-tags').value = '';
   document.getElementById('run-skip-tags').value = '';
   document.getElementById('run-check-mode').checked = false;
+  document.getElementById('run-verbosity').value = '0';
   showModal('run-modal');
 }
 
@@ -1024,6 +1025,7 @@ async function executePlaybook() {
     tags: document.getElementById('run-tags').value.trim(),
     skip_tags: document.getElementById('run-skip-tags').value.trim(),
     check_mode: document.getElementById('run-check-mode').checked,
+    verbosity: parseInt(document.getElementById('run-verbosity').value) || 0,
   });
 
   if (res.ok) {

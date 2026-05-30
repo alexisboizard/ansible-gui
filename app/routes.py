@@ -7,35 +7,16 @@ import threading
 import zipfile
 from datetime import datetime, timedelta
 
-from flask import (
-    Blueprint,
-    jsonify,
-    redirect,
-    render_template,
-    request,
-    session,
-    url_for,
-    Response,
-)
+from flask import (Blueprint, Response, jsonify, redirect, render_template,
+                   request, session, url_for)
 from flask_socketio import join_room, leave_room
 
 from app import db, socketio
-from app.auth import authenticate, login_required, admin_required, get_role_for_user
-from app.models import (
-    AuditLog,
-    DynamicInventory,
-    Execution,
-    Folder,
-    GroupVar,
-    Host,
-    HostVar,
-    LocalUser,
-    Playbook,
-    PlaybookVersion,
-    Role,
-    Schedule,
-    Setting,
-)
+from app.auth import (admin_required, authenticate, get_role_for_user,
+                      login_required)
+from app.models import (AuditLog, DynamicInventory, Execution, Folder,
+                        GroupVar, Host, HostVar, LocalUser, Playbook,
+                        PlaybookVersion, Role, Schedule, Setting)
 
 APP_VERSION = "1.0.0"
 
@@ -446,8 +427,9 @@ def api_hosts_delete(host_id):
 @bp.route("/api/hosts/ping", methods=["POST"])
 @login_required
 def api_hosts_ping():
-    from app.ping import ping_all_hosts
     from flask import current_app
+
+    from app.ping import ping_all_hosts
 
     app = current_app._get_current_object()
 
@@ -1263,8 +1245,8 @@ def api_settings_test_ldap():
         steps.append({"msg": msg, "ok": ok})
 
     try:
-        from ldap3 import Server, Connection, ALL, SIMPLE, SUBTREE
-        from ldap3.core.exceptions import LDAPException, LDAPBindError
+        from ldap3 import ALL, SIMPLE, SUBTREE, Connection, Server
+        from ldap3.core.exceptions import LDAPBindError, LDAPException
     except ImportError:
         return jsonify(
             {"ok": False, "steps": [{"msg": "ldap3 not installed", "ok": False}]}
@@ -1706,8 +1688,9 @@ def api_roles_list():
 @admin_required
 def api_roles_install():
     """Install a role from Galaxy or Git."""
-    import subprocess
     import os
+    import subprocess
+
     from flask import current_app
 
     data = request.get_json() or {}
@@ -1894,9 +1877,9 @@ def api_dynamic_inventories_delete(inv_id):
 @login_required
 def api_dynamic_inventories_test(inv_id):
     """Test a dynamic inventory and return the output."""
+    import stat
     import subprocess
     import tempfile
-    import stat
 
     inv = DynamicInventory.query.get_or_404(inv_id)
 

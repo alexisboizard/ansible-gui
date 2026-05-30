@@ -56,6 +56,7 @@ function showPage(name) {
   if (name === 'schedules') loadSchedules();
   if (name === 'settings') loadSettings();
   if (name === 'users') loadUsers();
+  if (name === 'audit') loadAudit();
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
@@ -1157,6 +1158,101 @@ async function deleteUser(id) {
   else {
     const err = await res.json().catch(() => ({}));
     toast(err.error || 'Failed to delete user', 'error');
+  }
+}
+
+// ── Audit Log ─────────────────────────────────────────────────────────────────
+
+let auditPage = 1;
+let auditTotal = 0;
+let auditDebounce = null;
+
+async function loadAudit(page = 1) {
+  if (auditDebounce) clearTimeout(auditDebounce);
+  auditDebounce = setTimeout(() => _loadAudit(page), 200);
+}
+
+async function _loadAudit(page = 1) {
+  auditPage = page;
+  const action = document.getElementById('audit-filter-action')?.value || '';
+  const user = document.getElementById('audit-filter-user')?.value || '';
+  const url = `/api/audit?page=${page}&action=${encodeURIComponent(action)}&user=${encodeURIComponent(user)}`;
+  const res = await api('GET', url);
+  if (!res.ok) return;
+  const data = await res.json();
+  auditTotal = data.total;
+  renderAudit(data.logs, data.total, data.page, data.per_page);
+}
+
+function renderAudit(logs, total, page, perPage) {
+  const tbody = document.getElementById('audit-tbody');
+  tbody.innerHTML = '';
+
+  if (logs.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      <p>No audit logs found.</p></div></td></tr>`;
+  } else {
+    for (const l of logs) {
+      const actionBadge = getActionBadge(l.action);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="font-size:12px">${fmtDate(l.created_at)}</td>
+        <td><strong>${l.user}</strong></td>
+        <td><span class="badge ${actionBadge.class}">${actionBadge.label}</span></td>
+        <td>
+          ${l.target_type ? `<span style="color:var(--text-muted);font-size:11px">${l.target_type}</span> ` : ''}
+          ${l.target_name || ''}
+          ${l.details && l.details !== '{}' ? `<span style="color:var(--text-muted);font-size:11px;margin-left:4px">${formatDetails(l.details)}</span>` : ''}
+        </td>
+        <td style="font-size:11px;color:var(--text-muted)">${l.ip_address || '—'}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+  }
+
+  const totalPages = Math.ceil(total / perPage);
+  document.getElementById('audit-info').textContent = `Page ${page} of ${totalPages} (${total} entries)`;
+  document.getElementById('audit-prev').disabled = page <= 1;
+  document.getElementById('audit-next').disabled = page >= totalPages;
+}
+
+function getActionBadge(action) {
+  const map = {
+    login: { label: 'Login', class: 'badge-success' },
+    login_failed: { label: 'Login Failed', class: 'badge-danger' },
+    host_create: { label: 'Create', class: 'badge-info' },
+    host_update: { label: 'Update', class: 'badge-warning' },
+    host_delete: { label: 'Delete', class: 'badge-danger' },
+    hosts_import: { label: 'Import', class: 'badge-info' },
+    folder_create: { label: 'Create', class: 'badge-info' },
+    folder_update: { label: 'Update', class: 'badge-warning' },
+    folder_delete: { label: 'Delete', class: 'badge-danger' },
+    playbook_create: { label: 'Create', class: 'badge-info' },
+    playbook_update: { label: 'Update', class: 'badge-warning' },
+    playbook_delete: { label: 'Delete', class: 'badge-danger' },
+    playbook_restore: { label: 'Restore', class: 'badge-info' },
+    playbooks_import: { label: 'Import', class: 'badge-info' },
+    execution_start: { label: 'Execute', class: 'badge-success' },
+    execution_cancel: { label: 'Cancel', class: 'badge-warning' },
+    executions_purge: { label: 'Purge', class: 'badge-danger' },
+    schedule_create: { label: 'Create', class: 'badge-info' },
+    schedule_update: { label: 'Update', class: 'badge-warning' },
+    schedule_delete: { label: 'Delete', class: 'badge-danger' },
+    settings_update: { label: 'Settings', class: 'badge-warning' },
+    user_create: { label: 'Create', class: 'badge-info' },
+    user_update: { label: 'Update', class: 'badge-warning' },
+    user_delete: { label: 'Delete', class: 'badge-danger' },
+  };
+  return map[action] || { label: action, class: 'badge-muted' };
+}
+
+function formatDetails(details) {
+  try {
+    const obj = JSON.parse(details);
+    return Object.entries(obj).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(', ');
+  } catch (e) {
+    return '';
   }
 }
 

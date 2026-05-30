@@ -89,6 +89,31 @@ class PlaybookVersion(db.Model):
         }
 
 
+class AuditLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    action = db.Column(db.String(50), nullable=False)
+    user = db.Column(db.String(100), nullable=False)
+    target_type = db.Column(db.String(50), default="")
+    target_id = db.Column(db.Integer, nullable=True)
+    target_name = db.Column(db.String(255), default="")
+    details = db.Column(db.Text, default="{}")
+    ip_address = db.Column(db.String(50), default="")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "action": self.action,
+            "user": self.user,
+            "target_type": self.target_type,
+            "target_id": self.target_id,
+            "target_name": self.target_name,
+            "details": self.details,
+            "ip_address": self.ip_address,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 class Execution(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     playbook_id = db.Column(db.Integer, db.ForeignKey("playbook.id"), nullable=True)

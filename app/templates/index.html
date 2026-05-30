@@ -68,6 +68,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         <span>Users</span>
       </button>
+      <button class="sidebar-link" data-page="audit" onclick="showPage('audit')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+        <span>Audit Log</span>
+      </button>
     </nav>
 
     <div class="sidebar-footer">
@@ -321,6 +325,42 @@
           <div class="settings-grid">
             <div class="settings-nav" id="settings-nav"></div>
             <div id="settings-content"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Audit Page ── -->
+    <section class="page" id="page-audit">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Audit Log</h3>
+          <div style="display:flex;gap:8px">
+            <input type="text" class="form-control" id="audit-filter-action" placeholder="Filter by action..." style="width:160px" oninput="loadAudit()">
+            <input type="text" class="form-control" id="audit-filter-user" placeholder="Filter by user..." style="width:160px" oninput="loadAudit()">
+          </div>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:160px">Date</th>
+                <th style="width:120px">User</th>
+                <th style="width:140px">Action</th>
+                <th>Target</th>
+                <th style="width:100px">IP</th>
+              </tr>
+            </thead>
+            <tbody id="audit-tbody">
+              <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:24px">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="padding:12px 16px;border-top:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center">
+          <span id="audit-info" style="font-size:12px;color:var(--text-muted)"></span>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-secondary btn-sm" id="audit-prev" onclick="loadAudit(auditPage - 1)" disabled>Previous</button>
+            <button class="btn btn-secondary btn-sm" id="audit-next" onclick="loadAudit(auditPage + 1)">Next</button>
           </div>
         </div>
       </div>

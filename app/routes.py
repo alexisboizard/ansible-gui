@@ -18,7 +18,7 @@ from flask import (
 
 from app import db
 from app.auth import authenticate, login_required, admin_required, get_role_for_user
-from app.models import Execution, Folder, Host, LocalUser, Playbook, PlaybookVersion, Schedule, Setting
+from app.models import AuditLog, Execution, Folder, Host, LocalUser, Playbook, PlaybookVersion, Schedule, Setting
 
 bp = Blueprint("main", __name__)
 
@@ -80,6 +80,26 @@ SETTINGS_SCHEMA = [
 ]
 
 
+# ──────────────────── AUDIT HELPER ────────────────────
+
+def audit(action, target_type="", target_id=None, target_name="", details=None):
+    """Log an audit event."""
+    try:
+        log = AuditLog(
+            action=action,
+            user=session.get("user", "system"),
+            target_type=target_type,
+            target_id=target_id,
+            target_name=target_name,
+            details=json.dumps(details) if details else "{}",
+            ip_address=request.remote_addr or "",
+        )
+        db.session.add(log)
+        db.session.commit()
+    except Exception:
+        pass
+
+
 # ──────────────────── AUTH ────────────────────
 
 @bp.route("/login", methods=["GET"])
@@ -110,7 +130,9 @@ def api_login():
             db.session.commit()
         session["user"] = user
         session["role"] = local.role or "admin"
+        audit("login", "user", None, username)
         return jsonify({"ok": True})
+    audit("login_failed", "user", None, username)
     return jsonify({"ok": False, "error": "Invalid credentials"}), 401
 
 
@@ -183,6 +205,7 @@ def api_hosts_create():
     )
     db.session.add(host)
     db.session.commit()
+    audit("host_create", "host", host.id, host.name)
     return jsonify(host.to_dict()), 201
 
 
@@ -197,6 +220,7 @@ def api_hosts_update(host_id):
     host.variables = json.dumps(data.get("variables", json.loads(host.variables or "{}")))
     host.os_type = data.get("os_type", host.os_type)
     db.session.commit()
+    audit("host_update", "host", host.id, host.name)
     return jsonify(host.to_dict())
 
 
@@ -204,8 +228,10 @@ def api_hosts_update(host_id):
 @admin_required
 def api_hosts_delete(host_id):
     host = Host.query.get_or_404(host_id)
+    name = host.name
     db.session.delete(host)
     db.session.commit()
+    audit("host_delete", "host", host_id, name)
     return jsonify({"ok": True})
 
 
@@ -273,6 +299,7 @@ def api_hosts_import():
             db.session.add(host)
         imported += 1
     db.session.commit()
+    audit("hosts_import", "host", None, "", {"count": imported})
     return jsonify({"ok": True, "imported": imported})
 
 
@@ -297,6 +324,7 @@ def api_folders_create():
     folder = Folder(name=name)
     db.session.add(folder)
     db.session.commit()
+    audit("folder_create", "folder", folder.id, folder.name)
     return jsonify(folder.to_dict()), 201
 
 
@@ -310,6 +338,7 @@ def api_folders_update(folder_id):
         return jsonify({"error": "Name is required"}), 400
     folder.name = name
     db.session.commit()
+    audit("folder_update", "folder", folder.id, folder.name)
     return jsonify(folder.to_dict())
 
 
@@ -317,11 +346,13 @@ def api_folders_update(folder_id):
 @admin_required
 def api_folders_delete(folder_id):
     folder = Folder.query.get_or_404(folder_id)
+    name = folder.name
     # Unassign playbooks from this folder instead of deleting them
     for pb in folder.playbooks:
         pb.folder_id = None
     db.session.delete(folder)
     db.session.commit()
+    audit("folder_delete", "folder", folder_id, name)
     return jsonify({"ok": True})
 
 
@@ -357,6 +388,7 @@ def api_playbooks_create():
     )
     db.session.add(version)
     db.session.commit()
+    audit("playbook_create", "playbook", playbook.id, playbook.name)
     return jsonify(playbook.to_dict()), 201
 
 
@@ -389,6 +421,7 @@ def api_playbooks_update(pb_id):
         db.session.add(version)
 
     db.session.commit()
+    audit("playbook_update", "playbook", pb.id, pb.name, {"content_changed": content_changed})
     return jsonify(pb.to_dict())
 
 
@@ -396,8 +429,10 @@ def api_playbooks_update(pb_id):
 @admin_required
 def api_playbooks_delete(pb_id):
     pb = Playbook.query.get_or_404(pb_id)
+    name = pb.name
     db.session.delete(pb)
     db.session.commit()
+    audit("playbook_delete", "playbook", pb_id, name)
     return jsonify({"ok": True})
 
 
@@ -446,7 +481,7 @@ def api_playbook_version_restore(pb_id, version_id):
     pb.content = version.content
     pb.updated_at = datetime.utcnow()
     db.session.commit()
-
+    audit("playbook_restore", "playbook", pb.id, pb.name, {"restored_version": version.version_num})
     return jsonify({"ok": True, "version_num": next_num})
 
 
@@ -552,6 +587,7 @@ def api_playbooks_import():
         return jsonify({"error": "Unsupported file type. Use .yml, .yaml or .zip"}), 400
 
     db.session.commit()
+    audit("playbooks_import", "playbook", None, "", {"imported": imported, "updated": updated})
     return jsonify({"ok": True, "imported": imported, "updated": updated})
 
 
@@ -599,7 +635,7 @@ def api_executions_create():
 
     thread = threading.Thread(target=run_playbook, args=(execution_id,), daemon=True)
     thread.start()
-
+    audit("execution_start", "execution", execution_id, pb.name, {"check_mode": execution.check_mode})
     return jsonify({"ok": True, "id": execution_id}), 201
 
 
@@ -612,14 +648,17 @@ def api_executions_cancel(exec_id):
         execution.output += "\n[Cancelled by user]"
         execution.finished_at = datetime.utcnow()
         db.session.commit()
+        audit("execution_cancel", "execution", exec_id, execution.playbook_name)
     return jsonify({"ok": True})
 
 
 @bp.route("/api/executions/purge", methods=["POST"])
 @admin_required
 def api_executions_purge():
+    count = Execution.query.count()
     Execution.query.delete()
     db.session.commit()
+    audit("executions_purge", "execution", None, "", {"count": count})
     return jsonify({"ok": True})
 
 
@@ -657,6 +696,7 @@ def api_schedules_create():
     db.session.add(schedule)
     db.session.commit()
     register_schedule(schedule)
+    audit("schedule_create", "schedule", schedule.id, schedule.name)
     return jsonify(schedule.to_dict()), 201
 
 
@@ -673,6 +713,7 @@ def api_schedules_update(sched_id):
     schedule.enabled = data.get("enabled", schedule.enabled)
     db.session.commit()
     register_schedule(schedule)
+    audit("schedule_update", "schedule", schedule.id, schedule.name)
     return jsonify(schedule.to_dict())
 
 
@@ -681,9 +722,11 @@ def api_schedules_update(sched_id):
 def api_schedules_delete(sched_id):
     from app.scheduler import unregister_schedule
     schedule = Schedule.query.get_or_404(sched_id)
+    name = schedule.name
     unregister_schedule(sched_id)
     db.session.delete(schedule)
     db.session.commit()
+    audit("schedule_delete", "schedule", sched_id, name)
     return jsonify({"ok": True})
 
 
@@ -708,10 +751,13 @@ def api_settings_get():
 @admin_required
 def api_settings_save():
     data = request.get_json() or {}
+    changed_keys = []
     for key, value in data.items():
         if key in SENSITIVE_KEYS and value in ("", "••••••••"):
             continue  # Skip masked / empty sensitive fields
         Setting.set(key, value)
+        changed_keys.append(key)
+    audit("settings_update", "settings", None, "", {"keys": changed_keys})
     return jsonify({"ok": True})
 
 
@@ -719,6 +765,33 @@ def api_settings_save():
 @login_required
 def api_settings_schema():
     return jsonify(SETTINGS_SCHEMA)
+
+
+# ──────────────────── AUDIT ────────────────────
+
+@bp.route("/api/audit", methods=["GET"])
+@login_required
+def api_audit():
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 50, type=int)
+    action = request.args.get("action", "").strip()
+    user = request.args.get("user", "").strip()
+
+    query = AuditLog.query.order_by(AuditLog.created_at.desc())
+    if action:
+        query = query.filter(AuditLog.action.ilike(f"%{action}%"))
+    if user:
+        query = query.filter(AuditLog.user.ilike(f"%{user}%"))
+
+    total = query.count()
+    logs = query.offset((page - 1) * per_page).limit(per_page).all()
+
+    return jsonify({
+        "logs": [l.to_dict() for l in logs],
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+    })
 
 
 # ──────────────────── USERS ────────────────────
@@ -758,6 +831,7 @@ def api_users_create():
     user.set_password(password)
     db.session.add(user)
     db.session.commit()
+    audit("user_create", "user", user.id, username, {"role": role})
     return jsonify({"id": user.id, "username": user.username, "role": user.role,
                     "created_at": user.created_at.isoformat() if user.created_at else None}), 201
 
@@ -770,10 +844,12 @@ def api_users_update(user_id):
     data = request.get_json() or {}
     password = data.get("password", "")
     role = data.get("role")
+    changes = []
     if password:
         if is_ldap:
             return jsonify({"error": "Cannot set password for an LDAP user"}), 400
         user.set_password(password)
+        changes.append("password")
     if role in ("admin", "readonly"):
         # Prevent demoting the last admin
         if role == "readonly" and user.role == "admin":
@@ -781,9 +857,11 @@ def api_users_update(user_id):
             if admin_count <= 1:
                 return jsonify({"error": "Cannot demote the last admin"}), 400
         user.role = role
+        changes.append("role")
     if not password and not role:
         return jsonify({"error": "Nothing to update"}), 400
     db.session.commit()
+    audit("user_update", "user", user_id, user.username, {"changed": changes})
     return jsonify({"ok": True})
 
 
@@ -795,8 +873,10 @@ def api_users_delete(user_id):
         return jsonify({"error": "Cannot delete the last user"}), 400
     if user.role == "admin" and LocalUser.query.filter_by(role="admin").count() <= 1:
         return jsonify({"error": "Cannot delete the last admin user"}), 400
+    username = user.username
     db.session.delete(user)
     db.session.commit()
+    audit("user_delete", "user", user_id, username)
     return jsonify({"ok": True})
 
 

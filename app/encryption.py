@@ -4,7 +4,6 @@ The encryption key is generated on first run and stored in .encryption_key file
 or can be provided via ENCRYPTION_KEY environment variable.
 """
 
-import base64
 import logging
 import os
 

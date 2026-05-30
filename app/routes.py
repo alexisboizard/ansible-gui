@@ -2,7 +2,6 @@ import csv
 import io
 import json
 import os
-import stat
 import threading
 import zipfile
 from datetime import datetime, timedelta
@@ -20,7 +19,7 @@ from flask import (
 from flask_socketio import join_room, leave_room
 
 from app import db, socketio
-from app.auth import admin_required, authenticate, get_role_for_user, login_required
+from app.auth import admin_required, authenticate, login_required
 from app.models import (
     AuditLog,
     DynamicInventory,
@@ -1146,7 +1145,7 @@ def api_audit():
 
     return jsonify(
         {
-            "logs": [l.to_dict() for l in logs],
+            "logs": [log.to_dict() for log in logs],
             "total": total,
             "page": page,
             "per_page": per_page,
@@ -1322,7 +1321,7 @@ def api_settings_test_ldap():
     # Service account bind
     try:
         if bind_dn and bind_pass:
-            step(f"Attempting service account bind...")
+            step("Attempting service account bind...")
             conn = Connection(
                 server,
                 user=bind_dn,
@@ -1331,7 +1330,7 @@ def api_settings_test_ldap():
                 auto_bind=True,
                 receive_timeout=10,
             )
-            step(f"Service account bind OK")
+            step("Service account bind OK")
         elif bind_dn and not bind_pass:
             step("Cannot bind: bind_dn is set but password is empty", ok=False)
             return jsonify({"ok": False, "steps": steps})

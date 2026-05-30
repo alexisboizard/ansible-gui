@@ -30,7 +30,7 @@ jobs:
         run: isort --check-only --diff --profile black app/
 
       - name: Lint with flake8
-        run: flake8 app/ --max-line-length=120 --ignore=E501,W503
+        run: flake8 app/ --max-line-length=120 --ignore=E501,W503,E203
 
   test:
     name: Test

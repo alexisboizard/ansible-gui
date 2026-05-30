@@ -51,6 +51,7 @@ function showPage(name) {
 
   if (name === 'dashboard') loadDashboard();
   if (name === 'inventory') loadHosts();
+  if (name === 'variables') loadVariables();
   if (name === 'playbooks') loadPlaybooks();
   if (name === 'executions') loadExecutions();
   if (name === 'schedules') loadSchedules();
@@ -93,6 +94,10 @@ async function loadDashboard() {
   document.getElementById('stat-reachable').textContent = data.reachable_hosts;
   document.getElementById('stat-playbooks').textContent = data.total_playbooks;
   document.getElementById('stat-executions').textContent = data.total_executions;
+
+  // Concurrency info
+  document.getElementById('stat-running').textContent = data.running_executions ?? '—';
+  document.getElementById('stat-max-concurrent').textContent = data.max_concurrent_executions ?? '—';
 
   const tbody = document.getElementById('recent-executions-tbody');
   tbody.innerHTML = '';
@@ -1449,6 +1454,12 @@ function getActionBadge(action) {
     user_create: { label: 'Create', class: 'badge-info' },
     user_update: { label: 'Update', class: 'badge-warning' },
     user_delete: { label: 'Delete', class: 'badge-danger' },
+    group_var_create: { label: 'Create', class: 'badge-info' },
+    group_var_update: { label: 'Update', class: 'badge-warning' },
+    group_var_delete: { label: 'Delete', class: 'badge-danger' },
+    host_var_create: { label: 'Create', class: 'badge-info' },
+    host_var_update: { label: 'Update', class: 'badge-warning' },
+    host_var_delete: { label: 'Delete', class: 'badge-danger' },
   };
   return map[action] || { label: action, class: 'badge-muted' };
 }
@@ -1525,6 +1536,174 @@ async function initMe() {
 }
 
 function isAdmin() { return currentRole === 'admin'; }
+
+// ── Variables (Group Vars & Host Vars) ───────────────────────────────────────
+
+let groupVarsData = [];
+let hostVarsData = [];
+
+async function loadVariables() {
+  const [gvRes, hvRes] = await Promise.all([
+    api('GET', '/api/group-vars'),
+    api('GET', '/api/host-vars'),
+  ]);
+  groupVarsData = await gvRes.json();
+  hostVarsData = await hvRes.json();
+  renderGroupVars();
+  renderHostVars();
+}
+
+function renderGroupVars() {
+  const tbody = document.getElementById('group-vars-tbody');
+  tbody.innerHTML = '';
+
+  if (groupVarsData.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg>
+      <p>No group variables defined.</p></div></td></tr>`;
+    return;
+  }
+
+  for (const gv of groupVarsData) {
+    const tr = document.createElement('tr');
+    const truncValue = gv.var_value.length > 50 ? gv.var_value.substring(0, 50) + '...' : gv.var_value;
+    tr.innerHTML = `
+      <td><span class="group-tag">${gv.group_name}</span></td>
+      <td><code style="font-size:12px">${gv.var_name}</code></td>
+      <td><code style="font-size:11px;color:var(--text-secondary)">${truncValue}</code></td>
+      <td>
+        <div style="display:flex;gap:4px">
+          ${isAdmin() ? `
+          <button class="btn btn-icon btn-sm" title="Edit" onclick="openGroupVarModal(${gv.id})">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="btn btn-icon btn-sm" title="Delete" onclick="deleteGroupVar(${gv.id})" style="color:var(--danger);border-color:rgba(245,54,92,0.3)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
+          </button>` : ''}
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+function renderHostVars() {
+  const tbody = document.getElementById('host-vars-tbody');
+  tbody.innerHTML = '';
+
+  if (hostVarsData.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg>
+      <p>No host variables defined.</p></div></td></tr>`;
+    return;
+  }
+
+  for (const hv of hostVarsData) {
+    const tr = document.createElement('tr');
+    const truncValue = hv.var_value.length > 50 ? hv.var_value.substring(0, 50) + '...' : hv.var_value;
+    tr.innerHTML = `
+      <td><strong>${hv.host_name}</strong></td>
+      <td><code style="font-size:12px">${hv.var_name}</code></td>
+      <td><code style="font-size:11px;color:var(--text-secondary)">${truncValue}</code></td>
+      <td>
+        <div style="display:flex;gap:4px">
+          ${isAdmin() ? `
+          <button class="btn btn-icon btn-sm" title="Edit" onclick="openHostVarModal(${hv.id})">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="btn btn-icon btn-sm" title="Delete" onclick="deleteHostVar(${hv.id})" style="color:var(--danger);border-color:rgba(245,54,92,0.3)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
+          </button>` : ''}
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+function openGroupVarModal(id = null) {
+  const gv = id ? groupVarsData.find(v => v.id === id) : null;
+  document.getElementById('group-var-modal-title').textContent = gv ? 'Edit Group Variable' : 'Add Group Variable';
+  document.getElementById('group-var-id').value = gv ? gv.id : '';
+  document.getElementById('group-var-group').value = gv ? gv.group_name : '';
+  document.getElementById('group-var-name').value = gv ? gv.var_name : '';
+  document.getElementById('group-var-value').value = gv ? gv.var_value : '';
+  showModal('group-var-modal');
+}
+
+async function saveGroupVar() {
+  const id = document.getElementById('group-var-id').value;
+  const data = {
+    group_name: document.getElementById('group-var-group').value.trim(),
+    var_name: document.getElementById('group-var-name').value.trim(),
+    var_value: document.getElementById('group-var-value').value,
+  };
+
+  if (!data.group_name) { toast('Group name is required', 'error'); return; }
+  if (!data.var_name) { toast('Variable name is required', 'error'); return; }
+
+  const res = id
+    ? await api('PUT', `/api/group-vars/${id}`, data)
+    : await api('POST', '/api/group-vars', data);
+
+  if (res.ok) {
+    toast(id ? 'Variable updated' : 'Variable created', 'success');
+    closeModal('group-var-modal');
+    loadVariables();
+  } else {
+    const err = await res.json().catch(() => ({}));
+    toast(err.error || 'Failed to save variable', 'error');
+  }
+}
+
+async function deleteGroupVar(id) {
+  if (!confirm('Delete this group variable?')) return;
+  const res = await api('DELETE', `/api/group-vars/${id}`);
+  if (res.ok) { toast('Variable deleted', 'success'); loadVariables(); }
+  else { toast('Failed to delete variable', 'error'); }
+}
+
+function openHostVarModal(id = null) {
+  const hv = id ? hostVarsData.find(v => v.id === id) : null;
+  document.getElementById('host-var-modal-title').textContent = hv ? 'Edit Host Variable' : 'Add Host Variable';
+  document.getElementById('host-var-id').value = hv ? hv.id : '';
+  document.getElementById('host-var-host').value = hv ? hv.host_name : '';
+  document.getElementById('host-var-name').value = hv ? hv.var_name : '';
+  document.getElementById('host-var-value').value = hv ? hv.var_value : '';
+  showModal('host-var-modal');
+}
+
+async function saveHostVar() {
+  const id = document.getElementById('host-var-id').value;
+  const data = {
+    host_name: document.getElementById('host-var-host').value.trim(),
+    var_name: document.getElementById('host-var-name').value.trim(),
+    var_value: document.getElementById('host-var-value').value,
+  };
+
+  if (!data.host_name) { toast('Host name is required', 'error'); return; }
+  if (!data.var_name) { toast('Variable name is required', 'error'); return; }
+
+  const res = id
+    ? await api('PUT', `/api/host-vars/${id}`, data)
+    : await api('POST', '/api/host-vars', data);
+
+  if (res.ok) {
+    toast(id ? 'Variable updated' : 'Variable created', 'success');
+    closeModal('host-var-modal');
+    loadVariables();
+  } else {
+    const err = await res.json().catch(() => ({}));
+    toast(err.error || 'Failed to save variable', 'error');
+  }
+}
+
+async function deleteHostVar(id) {
+  if (!confirm('Delete this host variable?')) return;
+  const res = await api('DELETE', `/api/host-vars/${id}`);
+  if (res.ok) { toast('Variable deleted', 'success'); loadVariables(); }
+  else { toast('Failed to delete variable', 'error'); }
+}
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 

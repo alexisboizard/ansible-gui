@@ -895,6 +895,72 @@
   </div>
 </div>
 
+<!-- Group Variable Modal -->
+<div class="modal-overlay" id="group-var-modal">
+  <div class="modal-box" style="max-width:480px">
+    <div class="modal-header">
+      <h3 class="modal-title" id="group-var-modal-title">Add Group Variable</h3>
+      <button class="modal-close" onclick="closeModal('group-var-modal')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="group-var-id">
+      <div class="form-group">
+        <label class="form-label">Group Name</label>
+        <input type="text" class="form-control" id="group-var-group" placeholder="webservers">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Must match a group name used in your hosts</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Variable Name</label>
+        <input type="text" class="form-control" id="group-var-name" placeholder="http_port">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Value</label>
+        <textarea class="form-control" id="group-var-value" rows="3" placeholder="80"></textarea>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Plain text or JSON for complex values</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('group-var-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveGroupVar()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Host Variable Modal -->
+<div class="modal-overlay" id="host-var-modal">
+  <div class="modal-box" style="max-width:480px">
+    <div class="modal-header">
+      <h3 class="modal-title" id="host-var-modal-title">Add Host Variable</h3>
+      <button class="modal-close" onclick="closeModal('host-var-modal')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="host-var-id">
+      <div class="form-group">
+        <label class="form-label">Host Name</label>
+        <input type="text" class="form-control" id="host-var-host" placeholder="web-server-01">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Must match a host name in your inventory</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Variable Name</label>
+        <input type="text" class="form-control" id="host-var-name" placeholder="http_port">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Value</label>
+        <textarea class="form-control" id="host-var-value" rows="3" placeholder="8080"></textarea>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Plain text or JSON for complex values</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('host-var-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveHostVar()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast Container -->
 <div class="toast-container" id="toast-container"></div>
 

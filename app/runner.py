@@ -6,7 +6,7 @@ import tempfile
 from datetime import datetime
 
 from app import db
-from app.models import Execution, Host, Setting
+from app.models import Execution, GroupVar, Host, HostVar, Setting
 
 
 def sanitize_group_name(name):
@@ -43,10 +43,20 @@ def run_playbook(execution_id):
                 f.write(playbook.content)
 
             # Build inventory
-            inventory = _build_inventory(execution.host_pattern)
+            inventory, host_vars_data = _build_inventory(execution.host_pattern)
             inventory_path = os.path.join(work_dir, "inventory.ini")
             with open(inventory_path, "w") as f:
                 f.write(inventory)
+
+            # Write host_vars files if any
+            if host_vars_data:
+                host_vars_dir = os.path.join(work_dir, "host_vars")
+                os.makedirs(host_vars_dir, exist_ok=True)
+                for host_name, vars_dict in host_vars_data.items():
+                    host_vars_file = os.path.join(host_vars_dir, f"{host_name}.yml")
+                    import yaml
+                    with open(host_vars_file, "w") as f:
+                        yaml.dump(vars_dict, f, default_flow_style=False)
 
             # Build env
             env = os.environ.copy()
@@ -147,7 +157,14 @@ def run_playbook(execution_id):
 
 
 def _build_inventory(host_pattern):
-    """Build an Ansible inventory INI string from DB hosts."""
+    """
+    Build an Ansible inventory INI string from DB hosts, including group_vars.
+
+    Returns:
+        tuple: (inventory_string, host_vars_dict)
+            - inventory_string: INI format inventory
+            - host_vars_dict: dict of {host_name: {var_name: var_value}} for writing to host_vars/ dir
+    """
     hosts = Host.query.all()
 
     ssh_user = Setting.get("ssh_default_user", "ansible") or "ansible"
@@ -155,6 +172,7 @@ def _build_inventory(host_pattern):
 
     groups = {}
     ungrouped = []
+    matched_hosts = []  # Track matched host names for host_vars
 
     for host in hosts:
         # Skip if pattern doesn't match
@@ -171,6 +189,8 @@ def _build_inventory(host_pattern):
                     break
             if not match:
                 continue
+
+        matched_hosts.append(host.name)
 
         # Parse host variables
         try:
@@ -199,19 +219,55 @@ def _build_inventory(host_pattern):
 
         if host_groups:
             for g in host_groups:
-                groups.setdefault(g, []).append(host_line)
+                groups.setdefault(g, []).append((host.name, host_line))
         else:
-            ungrouped.append(host_line)
+            ungrouped.append((host.name, host_line))
 
     lines = []
     if ungrouped:
         lines.append("[ungrouped]")
-        lines.extend(ungrouped)
+        for host_name, host_line in ungrouped:
+            lines.append(host_line)
         lines.append("")
 
     for group_name, group_hosts in groups.items():
         lines.append(f"[{group_name}]")
-        lines.extend(group_hosts)
+        for host_name, host_line in group_hosts:
+            lines.append(host_line)
         lines.append("")
 
-    return "\n".join(lines)
+    # Add group variables from GroupVar model
+    group_vars = GroupVar.query.all()
+    group_vars_by_group = {}
+    for gv in group_vars:
+        sanitized_group = sanitize_group_name(gv.group_name)
+        if sanitized_group not in group_vars_by_group:
+            group_vars_by_group[sanitized_group] = []
+        group_vars_by_group[sanitized_group].append((gv.var_name, gv.var_value))
+
+    for group_name, vars_list in group_vars_by_group.items():
+        lines.append(f"[{group_name}:vars]")
+        for var_name, var_value in vars_list:
+            # Handle values with spaces or special characters
+            if " " in var_value or "=" in var_value:
+                lines.append(f"{var_name}=\"{var_value}\"")
+            else:
+                lines.append(f"{var_name}={var_value}")
+        lines.append("")
+
+    # Build host_vars data for writing to host_vars/ directory
+    # This is the proper Ansible way to handle per-host variables
+    host_vars = HostVar.query.all()
+    host_vars_data = {}
+    for hv in host_vars:
+        if hv.host_name in matched_hosts:
+            if hv.host_name not in host_vars_data:
+                host_vars_data[hv.host_name] = {}
+            # Try to parse value as JSON/YAML for complex types
+            try:
+                parsed_value = json.loads(hv.var_value)
+            except (json.JSONDecodeError, TypeError):
+                parsed_value = hv.var_value
+            host_vars_data[hv.host_name][hv.var_name] = parsed_value
+
+    return "\n".join(lines), host_vars_data

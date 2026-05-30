@@ -2,6 +2,16 @@ import hashlib
 import os
 from datetime import datetime
 from app import db
+from app.encryption import encrypt_value, decrypt_value
+
+# Sensitive keys that should be encrypted
+SENSITIVE_SETTINGS = {
+    "ssh_private_key",
+    "ssh_default_password",
+    "vault_password",
+    "ldap_bind_password",
+    "smtp_password",
+}
 
 
 class Host(db.Model):
@@ -185,15 +195,26 @@ class Setting(db.Model):
     @staticmethod
     def get(key, default=None):
         s = Setting.query.filter_by(key=key).first()
-        return s.value if s else default
+        if not s:
+            return default
+        value = s.value
+        # Auto-decrypt sensitive settings
+        if key in SENSITIVE_SETTINGS and value:
+            value = decrypt_value(value)
+        return value
 
     @staticmethod
     def set(key, value):
+        # Auto-encrypt sensitive settings
+        stored_value = value
+        if key in SENSITIVE_SETTINGS and value:
+            stored_value = encrypt_value(value)
+
         s = Setting.query.filter_by(key=key).first()
         if s:
-            s.value = value
+            s.value = stored_value
         else:
-            s = Setting(key=key, value=value)
+            s = Setting(key=key, value=stored_value)
             db.session.add(s)
         db.session.commit()
 
@@ -234,6 +255,7 @@ class Setting(db.Model):
             "ssh_default_user": "ansible",
             "ssh_default_password": "",
             "vault_password": "",
+            "max_concurrent_executions": "5",
         }
         for key, val in defaults.items():
             if Setting.query.filter_by(key=key).first() is None:
@@ -260,3 +282,51 @@ class LocalUser(db.Model):
             (self.salt + password).encode()
         ).hexdigest()
         return expected == self.password_hash
+
+
+class GroupVar(db.Model):
+    """Variables for Ansible host groups."""
+    id = db.Column(db.Integer, primary_key=True)
+    group_name = db.Column(db.String(255), nullable=False)
+    var_name = db.Column(db.String(255), nullable=False)
+    var_value = db.Column(db.Text, default="")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint('group_name', 'var_name', name='uix_group_var'),
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "group_name": self.group_name,
+            "var_name": self.var_name,
+            "var_value": self.var_value,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class HostVar(db.Model):
+    """Variables for specific hosts (by host name)."""
+    id = db.Column(db.Integer, primary_key=True)
+    host_name = db.Column(db.String(255), nullable=False)
+    var_name = db.Column(db.String(255), nullable=False)
+    var_value = db.Column(db.Text, default="")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint('host_name', 'var_name', name='uix_host_var'),
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "host_name": self.host_name,
+            "var_name": self.var_name,
+            "var_value": self.var_value,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }

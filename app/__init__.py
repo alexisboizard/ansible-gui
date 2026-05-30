@@ -2,8 +2,10 @@ import os
 import sqlite3
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
+from flask_socketio import SocketIO
 
 db = SQLAlchemy()
+socketio = SocketIO()
 
 
 def _get_database_uri():
@@ -153,6 +155,16 @@ def create_app():
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", os.urandom(24).hex())
 
     db.init_app(app)
+
+    # Initialize SocketIO with the app
+    # async_mode='eventlet' for production, 'threading' for development fallback
+    socketio.init_app(
+        app,
+        async_mode='eventlet',
+        cors_allowed_origins="*",
+        logger=False,
+        engineio_logger=False
+    )
 
     with app.app_context():
         from app import models  # noqa: F401

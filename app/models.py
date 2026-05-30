@@ -60,6 +60,7 @@ class Playbook(db.Model):
     description = db.Column(db.Text, default="")
     content = db.Column(db.Text, default="")
     folder_id = db.Column(db.Integer, db.ForeignKey("folder.id"), nullable=True)
+    is_favorite = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -73,6 +74,7 @@ class Playbook(db.Model):
             "content": self.content,
             "folder_id": self.folder_id,
             "folder_name": self.folder.name if self.folder else None,
+            "is_favorite": self.is_favorite,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -138,6 +140,7 @@ class Execution(db.Model):
     check_mode = db.Column(db.Boolean, default=False)
     tags = db.Column(db.String(500), default="")
     skip_tags = db.Column(db.String(500), default="")
+    verbosity = db.Column(db.Integer, default=0)
 
     playbook = db.relationship("Playbook", backref="executions")
 
@@ -156,6 +159,7 @@ class Execution(db.Model):
             "check_mode": self.check_mode,
             "tags": self.tags,
             "skip_tags": self.skip_tags,
+            "verbosity": self.verbosity,
         }
 
 
@@ -269,6 +273,7 @@ class LocalUser(db.Model):
     password_hash = db.Column(db.String(128), nullable=False)
     salt = db.Column(db.String(32), nullable=False)
     role = db.Column(db.String(20), default="admin")
+    theme_preference = db.Column(db.String(20), default="system")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def set_password(self, password):

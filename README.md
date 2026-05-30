@@ -1,159 +1,240 @@
-# Ansible GUI
+<p align="center">
+  <img src="docs/assets/logo.svg" alt="Ansible GUI Logo" width="120">
+</p>
 
-Interface web pour gérer et exécuter des playbooks Ansible.
+<h1 align="center">Ansible GUI</h1>
 
-## Fonctionnalités
+<p align="center">
+  <strong>A modern, self-contained web interface for Ansible automation</strong>
+</p>
 
-- **Authentification AD/LDAP** : connexion via Active Directory, filtrage par groupe, sessions sécurisées
-- **Inventaire** : gestion CRUD des hôtes (hostname, IP, port, utilisateur, groupe, variables)
-- **Playbooks** : éditeur YAML avec coloration syntaxique (CodeMirror), création et modification
-- **Exécution** : lancement de playbooks avec choix du pattern d'hôtes, suivi du statut et consultation de la sortie
-- **Planification** : exécution automatique via expressions cron (APScheduler)
-- **Notifications** : rapport d'exécution envoyé par email (SMTP)
-- **Paramètres** : page de configuration intégrée pour LDAP/AD, SMTP et options générales, avec test de connexion
+<p align="center">
+  <a href="#features">Features</a> •
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#documentation">Documentation</a> •
+  <a href="#screenshots">Screenshots</a> •
+  <a href="#contributing">Contributing</a>
+</p>
 
-## Stack technique
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.9+-blue.svg" alt="Python 3.9+">
+  <img src="https://img.shields.io/badge/flask-3.0+-green.svg" alt="Flask 3.0+">
+  <img src="https://img.shields.io/badge/license-MIT-yellow.svg" alt="MIT License">
+  <img src="https://img.shields.io/badge/ansible-2.9+-red.svg" alt="Ansible 2.9+">
+</p>
 
-| Composant | Technologie |
-|-----------|-------------|
-| Backend | Python / Flask |
-| Base de données | SQLite (SQLAlchemy) |
-| Authentification | LDAP / Active Directory (ldap3) |
-| Frontend | Bootstrap 5, CodeMirror, JavaScript vanilla |
-| Planification | APScheduler |
-| Email | smtplib (config via UI) |
-| Conteneurisation | Docker |
+---
 
-## Démarrage rapide
+## Why Ansible GUI?
 
-### Avec Docker
+Ansible GUI provides a **complete web-based solution** for managing your Ansible infrastructure without requiring Git, AWX, or complex dependencies. Perfect for teams who want the power of Ansible with an intuitive interface.
+
+- **Self-contained**: No Git server required, internal versioning system
+- **Production-ready**: RBAC, audit logging, encrypted credentials, health checks
+- **Easy deployment**: Single Docker container or bare metal installation
+- **Community-friendly**: Open source, extensible, well-documented
+
+---
+
+## Features
+
+### Core Automation
+- **Playbook Management** — Create, edit, organize playbooks in folders with YAML syntax highlighting
+- **Smart Editor** — CodeMirror with Ansible autocompletion (Ctrl+Space), module hints, snippets
+- **Execution Engine** — Run playbooks with extra variables, tags, check mode (dry run)
+- **Scheduling** — Cron-based automation with APScheduler
+- **Version History** — Built-in versioning, compare and restore previous versions
+
+### Inventory Management
+- **Host Management** — Add hosts with variables, groups, Linux/Windows support
+- **Group & Host Variables** — Dedicated variable management per group or host
+- **Dynamic Inventory** — Python scripts or Ansible plugins (AWS, Azure, custom)
+- **Ping Monitoring** — Auto-check host reachability with latency tracking
+- **Import/Export** — CSV and ZIP support for bulk operations
+
+### Ansible Ecosystem
+- **Roles from Galaxy** — Search, install, manage roles from Ansible Galaxy
+- **Git Roles** — Install roles directly from Git repositories
+- **Vault Support** — Decrypt vault-encrypted variables in playbooks
+- **Collections Ready** — Use any Ansible collection in your playbooks
+
+### Enterprise Features
+- **Authentication** — Local users + LDAP/Active Directory with auto-provisioning
+- **RBAC** — Admin and Read-Only roles with per-user management
+- **Audit Logging** — Complete traceability of all actions
+- **Encrypted Credentials** — Fernet encryption for sensitive data (SSH keys, passwords)
+- **Concurrency Control** — Limit simultaneous executions
+- **Email Notifications** — SMTP alerts on success/failure
+
+### Operations
+- **Dashboard** — Real-time stats, execution trends (Chart.js), top playbooks
+- **Health Endpoint** — `/health` for load balancers and monitoring
+- **API Documentation** — Swagger UI at `/api/docs`
+- **PostgreSQL Support** — Scale beyond SQLite when needed
+
+---
+
+## Quick Start
+
+### Docker (Recommended)
 
 ```bash
-cp .env.example .env
-# Éditer .env (SECRET_KEY uniquement)
+# Clone the repository
+git clone https://github.com/alexisboizard/ansible-gui.git
+cd ansible-gui
+
+# Start with Docker Compose
 docker compose up -d
+
+# Access the interface
+open http://localhost:5000
 ```
 
-L'application est accessible sur `http://localhost:5000`.
+Default credentials: `admin` / `admin`
 
-### Sans Docker
+### Bare Metal
 
 ```bash
-python -m venv venv
+# Clone and setup
+git clone https://github.com/alexisboizard/ansible-gui.git
+cd ansible-gui
+
+# Create virtual environment
+python3 -m venv venv
 source venv/bin/activate
+
+# Install dependencies
 pip install -r requirements.txt
 
-cp .env.example .env
-# Éditer .env
-
+# Run the application
 python run.py
 ```
 
+See [full installation guide](docs/installation-baremetal.md) for detailed instructions.
+
+---
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Installation (Bare Metal)](docs/installation-baremetal.md) | Complete guide for native installation |
+| [Installation (Docker)](docs/installation-docker.md) | Docker and Docker Compose setup |
+| [User Guide](docs/user-guide.md) | How to use all features |
+| [API Reference](/api/docs) | Swagger documentation (when running) |
+
+---
+
+## Screenshots
+
+<details>
+<summary>Dashboard</summary>
+
+The dashboard provides an overview of your infrastructure with execution trends, success rates, and quick access to recent activity.
+
+</details>
+
+<details>
+<summary>Playbook Editor</summary>
+
+Edit playbooks with syntax highlighting, autocompletion, and instant execution.
+
+</details>
+
+<details>
+<summary>Inventory Management</summary>
+
+Manage hosts, groups, and variables with an intuitive interface.
+
+</details>
+
+---
+
+## Tech Stack
+
+| Component | Technology |
+|-----------|------------|
+| Backend | Python 3.9+ / Flask 3.0 |
+| Database | SQLite (default) or PostgreSQL |
+| Authentication | Local + LDAP/AD (ldap3) |
+| Frontend | Vanilla JS, Chart.js, CodeMirror |
+| Scheduling | APScheduler |
+| Encryption | cryptography (Fernet) |
+| Container | Docker / Docker Compose |
+
+---
+
 ## Configuration
 
-### Variables d'environnement (.env)
+### Environment Variables
 
-| Variable | Description | Défaut |
-|----------|-------------|--------|
-| `SECRET_KEY` | Clé secrète Flask | `change-me-in-production` |
-| `DATABASE_URL` | URI SQLAlchemy | `sqlite:///ansible_gui.db` |
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `SECRET_KEY` | Flask secret key | `change-me-in-production` |
+| `DATABASE_URL` | Database connection string | `sqlite:///instance/ansible_gui.db` |
+| `ENCRYPTION_KEY` | Fernet key for credentials | Auto-generated |
 
-### PostgreSQL Support
+### Settings via Web UI
 
-By default, Ansible GUI uses SQLite. To use PostgreSQL instead, set the `DATABASE_URL` environment variable:
+All operational settings are configurable through the Settings page:
+
+- **Authentication**: LDAP server, bind credentials, user filter
+- **SSH**: Default user, password, private key
+- **Vault**: Ansible Vault password
+- **Notifications**: SMTP server, recipients, triggers
+- **System**: Ping interval, concurrency limits
+
+---
+
+## API
+
+Full REST API with Swagger documentation available at `/api/docs`.
 
 ```bash
-# PostgreSQL connection string format
-export DATABASE_URL="postgresql://user:password@localhost:5432/ansible_gui"
+# Example: List all hosts
+curl -X GET http://localhost:5000/api/hosts \
+  -H "Cookie: session=..."
 
-# Or in .env file
-DATABASE_URL=postgresql://user:password@localhost:5432/ansible_gui
+# Example: Execute a playbook
+curl -X POST http://localhost:5000/api/executions \
+  -H "Content-Type: application/json" \
+  -d '{"playbook_id": 1, "check_mode": false}'
 ```
 
-**Requirements for PostgreSQL:**
-- Install `psycopg2-binary` (included in requirements.txt)
-- Create the database before starting the application:
-  ```bash
-  createdb ansible_gui
-  ```
-
-**Example Docker Compose with PostgreSQL:**
-
-```yaml
-version: '3.8'
-services:
-  app:
-    build: .
-    environment:
-      - DATABASE_URL=postgresql://ansible:ansible@db:5432/ansible_gui
-      - SECRET_KEY=your-secret-key
-    ports:
-      - "5000:5000"
-    depends_on:
-      - db
-
-  db:
-    image: postgres:15
-    environment:
-      - POSTGRES_USER=ansible
-      - POSTGRES_PASSWORD=ansible
-      - POSTGRES_DB=ansible_gui
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-
-volumes:
-  pgdata:
+Health check endpoint (no auth required):
+```bash
+curl http://localhost:5000/health
 ```
 
-### API Documentation
+---
 
-Swagger/OpenAPI documentation is available at `/api/docs` when the application is running. The OpenAPI 3.0 specification is served from `/static/swagger.json`.
+## Contributing
 
-### Paramètres via l'interface web
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-Tous les paramètres LDAP et SMTP se configurent depuis l'onglet **Paramètres** de l'interface :
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-**Active Directory / LDAP :**
-- Serveur, port, SSL
-- Bind DN et mot de passe (compte de service)
-- Base de recherche, filtre utilisateur
-- Groupe requis (optionnel)
+---
 
-**SMTP :**
-- Serveur, port, TLS
-- Identifiants
-- Expéditeur, destinataire par défaut
+## License
 
-Des boutons **Tester la connexion** permettent de valider la configuration avant de l'utiliser.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## API REST
+---
 
-Toutes les routes API nécessitent une authentification (session). Un appel non authentifié retourne `401`.
+## Acknowledgments
 
-| Méthode | Endpoint | Description |
-|---------|----------|-------------|
-| POST | `/login` | Page de connexion |
-| GET | `/logout` | Déconnexion |
-| GET | `/api/auth/me` | Utilisateur connecté |
-| GET | `/api/hosts` | Lister les hôtes |
-| POST | `/api/hosts` | Créer un hôte |
-| GET | `/api/hosts/:id` | Détail d'un hôte |
-| PUT | `/api/hosts/:id` | Modifier un hôte |
-| DELETE | `/api/hosts/:id` | Supprimer un hôte |
-| GET | `/api/playbooks` | Lister les playbooks |
-| POST | `/api/playbooks` | Créer un playbook |
-| GET | `/api/playbooks/:id` | Détail d'un playbook |
-| PUT | `/api/playbooks/:id` | Modifier un playbook |
-| DELETE | `/api/playbooks/:id` | Supprimer un playbook |
-| GET | `/api/executions` | Historique des exécutions |
-| POST | `/api/executions` | Lancer une exécution |
-| GET | `/api/executions/:id` | Détail d'une exécution |
-| GET | `/api/schedules` | Lister les planifications |
-| POST | `/api/schedules` | Créer une planification |
-| PUT | `/api/schedules/:id` | Modifier une planification |
-| DELETE | `/api/schedules/:id` | Supprimer une planification |
-| GET | `/api/settings/schema` | Schéma des paramètres |
-| GET | `/api/settings` | Lire les paramètres |
-| PUT | `/api/settings` | Modifier les paramètres |
-| POST | `/api/settings/test-ldap` | Tester la connexion LDAP |
-| POST | `/api/settings/test-smtp` | Tester la connexion SMTP |
+- [Ansible](https://www.ansible.com/) — The automation platform
+- [Flask](https://flask.palletsprojects.com/) — The web framework
+- [CodeMirror](https://codemirror.net/) — The code editor
+- [Chart.js](https://www.chartjs.org/) — The charting library
+
+---
+
+<p align="center">
+  Made with ❤️ for the Ansible community
+</p>

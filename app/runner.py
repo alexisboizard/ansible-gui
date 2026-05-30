@@ -74,11 +74,23 @@ def run_playbook(execution_id):
                 os.chmod(ssh_key_path, 0o600)
                 env["ANSIBLE_PRIVATE_KEY_FILE"] = ssh_key_path
 
+            # Vault password
+            vault_password = Setting.get("vault_password", "")
+            vault_pass_path = None
+            if vault_password and vault_password.strip():
+                vault_pass_path = os.path.join(work_dir, ".vault_pass")
+                with open(vault_pass_path, "w") as f:
+                    f.write(vault_password.strip())
+                os.chmod(vault_pass_path, 0o600)
+
             cmd = [
                 "ansible-playbook",
                 "-i", inventory_path,
                 playbook_path,
             ]
+
+            if vault_pass_path:
+                cmd += ["--vault-password-file", vault_pass_path]
 
             if execution.extra_vars and execution.extra_vars.strip():
                 cmd += ["--extra-vars", execution.extra_vars.strip()]

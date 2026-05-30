@@ -22,7 +22,7 @@ from app.models import AuditLog, Execution, Folder, Host, LocalUser, Playbook, P
 
 bp = Blueprint("main", __name__)
 
-SENSITIVE_KEYS = {"ldap_bind_password", "smtp_password", "ssh_private_key", "ssh_default_password"}
+SENSITIVE_KEYS = {"ldap_bind_password", "smtp_password", "ssh_private_key", "ssh_default_password", "vault_password"}
 
 SETTINGS_SCHEMA = [
     {
@@ -67,6 +67,14 @@ SETTINGS_SCHEMA = [
             {"key": "ssh_default_user", "label": "Default SSH User", "type": "text"},
             {"key": "ssh_default_password", "label": "Default SSH Password", "type": "password"},
             {"key": "ssh_private_key", "label": "SSH Private Key (PEM)", "type": "textarea"},
+        ],
+    },
+    {
+        "category": "vault",
+        "label": "Ansible Vault",
+        "fields": [
+            {"key": "vault_password", "label": "Vault Password", "type": "password",
+             "hint": "Password used to decrypt ansible-vault encrypted variables in playbooks"},
         ],
     },
     {

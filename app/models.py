@@ -233,6 +233,7 @@ class Setting(db.Model):
             "ssh_private_key": "",
             "ssh_default_user": "ansible",
             "ssh_default_password": "",
+            "vault_password": "",
         }
         for key, val in defaults.items():
             if Setting.query.filter_by(key=key).first() is None:

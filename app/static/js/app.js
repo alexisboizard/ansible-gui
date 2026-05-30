@@ -958,6 +958,88 @@ async function executePlaybook() {
 // ── Executions ────────────────────────────────────────────────────────────────
 
 let outputPollTimer = null;
+let outputSocket = null;
+let currentExecutionId = null;
+let useWebSocket = true;  // Try WebSocket first, fallback to polling if unavailable
+
+function initSocket() {
+  // Initialize Socket.IO connection if not already connected
+  if (outputSocket && outputSocket.connected) return outputSocket;
+
+  try {
+    if (typeof io === 'undefined') {
+      console.warn('Socket.IO not loaded, falling back to polling');
+      useWebSocket = false;
+      return null;
+    }
+
+    outputSocket = io({
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 3,
+      reconnectionDelay: 1000,
+    });
+
+    outputSocket.on('connect', () => {
+      console.log('WebSocket connected');
+      useWebSocket = true;
+    });
+
+    outputSocket.on('connect_error', (error) => {
+      console.warn('WebSocket connection error, falling back to polling:', error.message);
+      useWebSocket = false;
+    });
+
+    outputSocket.on('disconnect', () => {
+      console.log('WebSocket disconnected');
+    });
+
+    // Handle real-time execution output
+    outputSocket.on('execution_output', (data) => {
+      if (data.execution_id === currentExecutionId) {
+        const out = document.getElementById('output-content');
+        if (out) {
+          // Append the new line to existing content
+          const currentText = out.textContent === 'Loading...' || out.textContent === '(no output)' ? '' : out.textContent;
+          out.textContent = currentText + data.line;
+          out.scrollTop = out.scrollHeight;
+        }
+      }
+    });
+
+    // Handle execution status changes
+    outputSocket.on('execution_status', (data) => {
+      if (data.execution_id === currentExecutionId) {
+        const statusEl = document.getElementById('output-status');
+        if (statusEl) {
+          statusEl.innerHTML = `<span class="badge ${statusBadge(data.status)}">${data.status}</span>`;
+        }
+
+        // Update output if provided (for initial state or final state)
+        if (data.output !== undefined) {
+          const out = document.getElementById('output-content');
+          if (out && (out.textContent === 'Loading...' || data.status === 'success' || data.status === 'failed')) {
+            out.textContent = data.output || '(no output)';
+            out.scrollTop = out.scrollHeight;
+          }
+        }
+
+        // If execution finished, leave the room
+        if (data.status !== 'running' && data.status !== 'pending') {
+          if (outputSocket && outputSocket.connected) {
+            outputSocket.emit('leave_execution', { execution_id: currentExecutionId });
+          }
+        }
+      }
+    });
+
+    return outputSocket;
+  } catch (e) {
+    console.warn('Failed to initialize WebSocket:', e);
+    useWebSocket = false;
+    return null;
+  }
+}
 
 async function loadExecutions() {
   const res = await api('GET', '/api/executions');
@@ -1005,9 +1087,37 @@ async function openOutputModal(execId) {
   document.getElementById('output-content').textContent = 'Loading...';
   showModal('output-modal');
 
-  if (outputPollTimer) clearInterval(outputPollTimer);
+  // Clean up any previous state
+  if (outputPollTimer) {
+    clearInterval(outputPollTimer);
+    outputPollTimer = null;
+  }
 
+  // Leave previous room if any
+  if (currentExecutionId && outputSocket && outputSocket.connected) {
+    outputSocket.emit('leave_execution', { execution_id: currentExecutionId });
+  }
+
+  currentExecutionId = execId;
+
+  // Initialize WebSocket and join room for this execution
+  const socket = initSocket();
+
+  if (socket && socket.connected && useWebSocket) {
+    // Use WebSocket for real-time updates
+    socket.emit('join_execution', { execution_id: execId });
+    // The server will send current state when we join
+  } else {
+    // Fallback to polling if WebSocket not available
+    startPolling(execId);
+  }
+}
+
+// Polling fallback for when WebSocket is unavailable
+async function startPolling(execId) {
   const poll = async () => {
+    if (currentExecutionId !== execId) return;  // Stale poll
+
     const res = await api('GET', `/api/executions/${execId}`);
     if (!res.ok) return;
     const e = await res.json();
@@ -1494,9 +1604,17 @@ function showModal(id) {
 
 function closeModal(id) {
   document.getElementById(id).classList.remove('show');
-  if (id === 'output-modal' && outputPollTimer) {
-    clearInterval(outputPollTimer);
-    outputPollTimer = null;
+  if (id === 'output-modal') {
+    // Clean up polling timer
+    if (outputPollTimer) {
+      clearInterval(outputPollTimer);
+      outputPollTimer = null;
+    }
+    // Leave WebSocket room
+    if (currentExecutionId && outputSocket && outputSocket.connected) {
+      outputSocket.emit('leave_execution', { execution_id: currentExecutionId });
+    }
+    currentExecutionId = null;
   }
   if (id === 'pb-modal' && cmEditor) {
     cmEditor.toTextArea();
@@ -2110,6 +2228,297 @@ function ansibleHint(cm) {
   };
 }
 
+// ── Global Search (Ctrl+K) ────────────────────────────────────────────────────
+
+let searchDebounceTimer = null;
+let searchSelectedIndex = -1;
+let searchResults = [];
+const RECENT_SEARCHES_KEY = 'ansible_gui_recent_searches';
+
+function openSearchModal() {
+  const modal = document.getElementById('search-modal');
+  const input = document.getElementById('global-search-input');
+  modal.classList.add('show');
+  input.value = '';
+  input.focus();
+  searchSelectedIndex = -1;
+  searchResults = [];
+  document.getElementById('search-results').innerHTML = `
+    <div class="search-empty" id="search-empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <p>Type to search across all items</p>
+    </div>
+  `;
+  renderRecentSearches();
+}
+
+function closeSearchModal() {
+  document.getElementById('search-modal').classList.remove('show');
+  searchSelectedIndex = -1;
+  searchResults = [];
+}
+
+function getRecentSearches() {
+  try {
+    const stored = localStorage.getItem(RECENT_SEARCHES_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function addRecentSearch(item) {
+  let recent = getRecentSearches();
+  // Remove duplicates
+  recent = recent.filter(r => !(r.type === item.type && r.id === item.id));
+  // Add to beginning
+  recent.unshift(item);
+  // Keep only last 5
+  recent = recent.slice(0, 5);
+  localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(recent));
+}
+
+function renderRecentSearches() {
+  const container = document.getElementById('search-recent-container');
+  const list = document.getElementById('search-recent-list');
+  const recent = getRecentSearches();
+
+  if (recent.length === 0) {
+    container.style.display = 'none';
+    return;
+  }
+
+  container.style.display = '';
+  list.innerHTML = '';
+
+  recent.forEach((item, idx) => {
+    const el = document.createElement('div');
+    el.className = 'search-result-item';
+    el.setAttribute('data-index', `recent-${idx}`);
+    el.innerHTML = `
+      ${getSearchResultIcon(item.type)}
+      <div class="search-result-content">
+        <div class="search-result-name">${escapeHtml(item.name)}</div>
+        <div class="search-result-subtitle">${escapeHtml(item.subtitle || '')}</div>
+      </div>
+      <span class="search-result-type">${item.type}</span>
+    `;
+    el.onclick = () => navigateToSearchResult(item);
+    list.appendChild(el);
+  });
+}
+
+function getSearchResultIcon(type) {
+  const icons = {
+    host: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>',
+    playbook: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
+    execution: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+    schedule: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+  };
+  return `<div class="search-result-icon ${type}">${icons[type] || icons.host}</div>`;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+async function performSearch(query) {
+  if (!query.trim()) {
+    document.getElementById('search-results').innerHTML = `
+      <div class="search-empty" id="search-empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <p>Type to search across all items</p>
+      </div>
+    `;
+    searchResults = [];
+    searchSelectedIndex = -1;
+    document.getElementById('search-recent-container').style.display = '';
+    renderRecentSearches();
+    return;
+  }
+
+  document.getElementById('search-recent-container').style.display = 'none';
+
+  try {
+    const res = await api('GET', `/api/search?q=${encodeURIComponent(query)}`);
+    const data = await res.json();
+    renderSearchResults(data);
+  } catch (e) {
+    document.getElementById('search-results').innerHTML = `
+      <div class="search-empty">
+        <p>Search failed. Please try again.</p>
+      </div>
+    `;
+  }
+}
+
+function renderSearchResults(data) {
+  const container = document.getElementById('search-results');
+  searchResults = [];
+  let html = '';
+  let globalIndex = 0;
+
+  const categories = [
+    { key: 'hosts', label: 'Hosts', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>' },
+    { key: 'playbooks', label: 'Playbooks', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>' },
+    { key: 'executions', label: 'Executions', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>' },
+    { key: 'schedules', label: 'Schedules', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' },
+  ];
+
+  for (const cat of categories) {
+    const items = data[cat.key] || [];
+    if (items.length === 0) continue;
+
+    html += `<div class="search-category-header">${cat.icon} ${cat.label}</div>`;
+
+    for (const item of items) {
+      searchResults.push(item);
+      html += `
+        <div class="search-result-item" data-index="${globalIndex}" onclick="selectSearchResult(${globalIndex})">
+          ${getSearchResultIcon(item.type)}
+          <div class="search-result-content">
+            <div class="search-result-name">${escapeHtml(item.name)}</div>
+            <div class="search-result-subtitle">${escapeHtml(item.subtitle || '')}</div>
+          </div>
+          <span class="search-result-type">${item.type}</span>
+        </div>
+      `;
+      globalIndex++;
+    }
+  }
+
+  if (searchResults.length === 0) {
+    html = `
+      <div class="search-empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <p>No results found</p>
+      </div>
+    `;
+  }
+
+  container.innerHTML = html;
+  searchSelectedIndex = -1;
+}
+
+function selectSearchResult(index) {
+  if (index >= 0 && index < searchResults.length) {
+    navigateToSearchResult(searchResults[index]);
+  }
+}
+
+function navigateToSearchResult(item) {
+  addRecentSearch(item);
+  closeSearchModal();
+
+  switch (item.type) {
+    case 'host':
+      showPage('inventory');
+      // Highlight/scroll to host after page loads
+      setTimeout(() => {
+        const rows = document.querySelectorAll('#hosts-tbody tr');
+        rows.forEach(row => {
+          if (row.textContent.includes(item.name)) {
+            row.style.background = 'var(--accent-glow)';
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => { row.style.background = ''; }, 2000);
+          }
+        });
+      }, 200);
+      break;
+
+    case 'playbook':
+      showPage('playbooks');
+      // Open playbook modal for editing
+      setTimeout(() => {
+        const pb = playbooksData.find(p => p.id === item.id);
+        if (pb && isAdmin()) {
+          openPlaybookModal(item.id);
+        }
+      }, 300);
+      break;
+
+    case 'execution':
+      showPage('executions');
+      // Open output modal
+      setTimeout(() => {
+        openOutputModal(item.id);
+      }, 300);
+      break;
+
+    case 'schedule':
+      showPage('schedules');
+      // Highlight schedule row
+      setTimeout(() => {
+        const rows = document.querySelectorAll('#schedules-tbody tr');
+        rows.forEach(row => {
+          if (row.textContent.includes(item.name)) {
+            row.style.background = 'var(--accent-glow)';
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => { row.style.background = ''; }, 2000);
+          }
+        });
+      }, 200);
+      break;
+  }
+}
+
+function updateSearchSelection(direction) {
+  const items = document.querySelectorAll('.search-result-item');
+  if (items.length === 0) return;
+
+  // Remove current selection
+  items.forEach(item => item.classList.remove('selected'));
+
+  // Update index
+  if (direction === 'down') {
+    searchSelectedIndex = (searchSelectedIndex + 1) % items.length;
+  } else if (direction === 'up') {
+    searchSelectedIndex = searchSelectedIndex <= 0 ? items.length - 1 : searchSelectedIndex - 1;
+  }
+
+  // Apply selection
+  const selected = items[searchSelectedIndex];
+  if (selected) {
+    selected.classList.add('selected');
+    selected.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
+function handleSearchKeydown(e) {
+  if (e.key === 'Escape') {
+    closeSearchModal();
+    e.preventDefault();
+  } else if (e.key === 'ArrowDown') {
+    updateSearchSelection('down');
+    e.preventDefault();
+  } else if (e.key === 'ArrowUp') {
+    updateSearchSelection('up');
+    e.preventDefault();
+  } else if (e.key === 'Enter') {
+    if (searchSelectedIndex >= 0 && searchSelectedIndex < searchResults.length) {
+      navigateToSearchResult(searchResults[searchSelectedIndex]);
+    } else {
+      // Check if we're in recent searches
+      const recentItems = document.querySelectorAll('#search-recent-list .search-result-item.selected');
+      if (recentItems.length > 0) {
+        recentItems[0].click();
+      }
+    }
+    e.preventDefault();
+  }
+}
+
+// Initialize global search
+document.addEventListener('keydown', (e) => {
+  // Ctrl+K or Cmd+K
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    openSearchModal();
+  }
+});
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -2117,4 +2526,27 @@ document.addEventListener('DOMContentLoaded', async () => {
   await initMe();
   loadAnsibleModules();
   showPage('dashboard');
+
+  // Setup search modal events
+  const searchInput = document.getElementById('global-search-input');
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = setTimeout(() => {
+        performSearch(e.target.value);
+      }, 300);
+    });
+
+    searchInput.addEventListener('keydown', handleSearchKeydown);
+  }
+
+  // Close search modal on overlay click
+  const searchModal = document.getElementById('search-modal');
+  if (searchModal) {
+    searchModal.addEventListener('click', (e) => {
+      if (e.target === searchModal) {
+        closeSearchModal();
+      }
+    });
+  }
 });

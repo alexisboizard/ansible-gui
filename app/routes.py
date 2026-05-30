@@ -17,8 +17,9 @@ from flask import (
     url_for,
     Response,
 )
+from flask_socketio import join_room, leave_room
 
-from app import db
+from app import db, socketio
 from app.auth import authenticate, login_required, admin_required, get_role_for_user
 from app.models import AuditLog, DynamicInventory, Execution, Folder, GroupVar, Host, HostVar, LocalUser, Playbook, PlaybookVersion, Role, Schedule, Setting
 
@@ -160,7 +161,27 @@ def api_logout():
 @bp.route("/api/me", methods=["GET"])
 @login_required
 def api_me():
-    return jsonify({"username": session.get("user"), "role": session.get("role", "admin")})
+    user = LocalUser.query.filter_by(username=session.get("user")).first()
+    return jsonify({
+        "username": session.get("user"),
+        "role": session.get("role", "admin"),
+        "theme_preference": user.theme_preference if user else "system",
+    })
+
+
+@bp.route("/api/me/preferences", methods=["PUT"])
+@login_required
+def api_me_preferences():
+    user = LocalUser.query.filter_by(username=session.get("user")).first()
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    data = request.get_json() or {}
+    theme = data.get("theme")
+    if theme in ("dark", "light", "system"):
+        user.theme_preference = theme
+        db.session.commit()
+        audit("theme_preference_update", "user", user.id, user.username, {"theme": theme})
+    return jsonify({"ok": True, "theme_preference": user.theme_preference})
 
 
 @bp.route("/")
@@ -531,6 +552,63 @@ def api_playbooks_delete(pb_id):
     return jsonify({"ok": True})
 
 
+@bp.route("/api/playbooks/<int:pb_id>/favorite", methods=["POST"])
+@login_required
+def api_playbooks_favorite(pb_id):
+    pb = Playbook.query.get_or_404(pb_id)
+    pb.is_favorite = True
+    db.session.commit()
+    audit("playbook_favorite", "playbook", pb.id, pb.name)
+    return jsonify({"ok": True, "is_favorite": True})
+
+
+@bp.route("/api/playbooks/<int:pb_id>/favorite", methods=["DELETE"])
+@login_required
+def api_playbooks_unfavorite(pb_id):
+    pb = Playbook.query.get_or_404(pb_id)
+    pb.is_favorite = False
+    db.session.commit()
+    audit("playbook_unfavorite", "playbook", pb.id, pb.name)
+    return jsonify({"ok": True, "is_favorite": False})
+
+
+@bp.route("/api/playbooks/<int:pb_id>/duplicate", methods=["POST"])
+@admin_required
+def api_playbooks_duplicate(pb_id):
+    pb = Playbook.query.get_or_404(pb_id)
+
+    # Generate unique name
+    base_name = pb.name
+    copy_name = f"{base_name} (copy)"
+    counter = 1
+    while Playbook.query.filter_by(name=copy_name).first():
+        counter += 1
+        copy_name = f"{base_name} (copy {counter})"
+
+    new_pb = Playbook(
+        name=copy_name,
+        description=pb.description,
+        content=pb.content,
+        folder_id=pb.folder_id,
+        is_favorite=False,
+    )
+    db.session.add(new_pb)
+    db.session.flush()
+
+    # Create initial version for the duplicate
+    version = PlaybookVersion(
+        playbook_id=new_pb.id,
+        version_num=1,
+        content=new_pb.content,
+        created_by=session.get("user", "unknown"),
+    )
+    db.session.add(version)
+    db.session.commit()
+
+    audit("playbook_duplicate", "playbook", new_pb.id, new_pb.name, {"source_id": pb.id, "source_name": pb.name})
+    return jsonify(new_pb.to_dict()), 201
+
+
 # ──────────────────── PLAYBOOK VERSIONS ────────────────────
 
 @bp.route("/api/playbooks/<int:pb_id>/versions", methods=["GET"])
@@ -726,6 +804,15 @@ def api_executions_create():
     if not pb:
         return jsonify({"error": "Playbook not found"}), 404
 
+    # Validate verbosity (0-4)
+    verbosity = data.get("verbosity", 0)
+    try:
+        verbosity = int(verbosity)
+        if verbosity < 0 or verbosity > 4:
+            verbosity = 0
+    except (ValueError, TypeError):
+        verbosity = 0
+
     execution = Execution(
         playbook_id=pb.id,
         playbook_name=pb.name,
@@ -734,6 +821,7 @@ def api_executions_create():
         check_mode=bool(data.get("check_mode", False)),
         tags=data.get("tags", ""),
         skip_tags=data.get("skip_tags", ""),
+        verbosity=verbosity,
         status="pending",
         triggered_by=session.get("user", "unknown"),
     )
@@ -743,7 +831,7 @@ def api_executions_create():
 
     thread = threading.Thread(target=run_playbook, args=(execution_id,), daemon=True)
     thread.start()
-    audit("execution_start", "execution", execution_id, pb.name, {"check_mode": execution.check_mode})
+    audit("execution_start", "execution", execution_id, pb.name, {"check_mode": execution.check_mode, "verbosity": verbosity})
     return jsonify({"ok": True, "id": execution_id}), 201
 
 
@@ -1659,6 +1747,77 @@ elif len(sys.argv) > 1 and sys.argv[1] == "--host":
 
 # ──────────────────── ANSIBLE MODULES (for autocompletion) ────────────────────
 
+@bp.route("/api/search", methods=["GET"])
+@login_required
+def api_search():
+    """Global search across hosts, playbooks, executions, and schedules."""
+    q = request.args.get("q", "").strip().lower()
+    if not q:
+        return jsonify({"hosts": [], "playbooks": [], "executions": [], "schedules": []})
+
+    limit = 5
+    like = f"%{q}%"
+
+    # Search hosts (name, address)
+    hosts_results = Host.query.filter(
+        Host.name.ilike(like) | Host.address.ilike(like)
+    ).limit(limit).all()
+
+    # Search playbooks (name, description)
+    playbooks_results = Playbook.query.filter(
+        Playbook.name.ilike(like) | Playbook.description.ilike(like)
+    ).limit(limit).all()
+
+    # Search executions (playbook_name)
+    executions_results = Execution.query.filter(
+        Execution.playbook_name.ilike(like)
+    ).order_by(Execution.started_at.desc()).limit(limit).all()
+
+    # Search schedules (name)
+    schedules_results = Schedule.query.filter(
+        Schedule.name.ilike(like)
+    ).limit(limit).all()
+
+    return jsonify({
+        "hosts": [
+            {
+                "id": h.id,
+                "name": h.name,
+                "type": "host",
+                "subtitle": h.address,
+            }
+            for h in hosts_results
+        ],
+        "playbooks": [
+            {
+                "id": p.id,
+                "name": p.name,
+                "type": "playbook",
+                "subtitle": p.description or "No description",
+            }
+            for p in playbooks_results
+        ],
+        "executions": [
+            {
+                "id": e.id,
+                "name": f"#{e.id} - {e.playbook_name}",
+                "type": "execution",
+                "subtitle": f"{e.status} - {e.started_at.strftime('%Y-%m-%d %H:%M') if e.started_at else 'Pending'}",
+            }
+            for e in executions_results
+        ],
+        "schedules": [
+            {
+                "id": s.id,
+                "name": s.name,
+                "type": "schedule",
+                "subtitle": s.cron_expr,
+            }
+            for s in schedules_results
+        ],
+    })
+
+
 @bp.route("/api/ansible/modules", methods=["GET"])
 @login_required
 def api_ansible_modules():
@@ -1715,3 +1874,34 @@ def api_ansible_modules():
         {"name": "always", "desc": "Always execute after block"},
     ]
     return jsonify(modules)
+
+
+# ──────────────────── WEBSOCKET EVENT HANDLERS ────────────────────
+
+@socketio.on('join_execution')
+def handle_join_execution(data):
+    """Client joins a room to receive real-time updates for a specific execution."""
+    execution_id = data.get('execution_id')
+    if execution_id:
+        room = f'execution_{execution_id}'
+        join_room(room)
+        # Send current state to the newly joined client
+        try:
+            execution = Execution.query.get(execution_id)
+            if execution:
+                socketio.emit('execution_status', {
+                    'execution_id': execution_id,
+                    'status': execution.status,
+                    'output': execution.output or ''
+                }, room=room)
+        except Exception:
+            pass
+
+
+@socketio.on('leave_execution')
+def handle_leave_execution(data):
+    """Client leaves an execution room."""
+    execution_id = data.get('execution_id')
+    if execution_id:
+        room = f'execution_{execution_id}'
+        leave_room(room)

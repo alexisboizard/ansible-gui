@@ -715,7 +715,7 @@
         <textarea class="form-control" id="run-extra-vars" rows="3" placeholder='key=value or {"key": "value"}'></textarea>
         <div style="font-size:11px;color:var(--text-muted);margin-top:4px">JSON or key=value pairs passed as --extra-vars</div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
         <div class="form-group" style="margin:0">
           <label class="form-label">Tags <span style="color:var(--text-muted);font-weight:400;text-transform:none">(optional)</span></label>
           <input type="text" class="form-control" id="run-tags" placeholder="deploy,configure">
@@ -723,6 +723,16 @@
         <div class="form-group" style="margin:0">
           <label class="form-label">Skip Tags <span style="color:var(--text-muted);font-weight:400;text-transform:none">(optional)</span></label>
           <input type="text" class="form-control" id="run-skip-tags" placeholder="debug">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Verbosity</label>
+          <select class="form-control" id="run-verbosity">
+            <option value="0">Normal</option>
+            <option value="1">-v (verbose)</option>
+            <option value="2">-vv (more verbose)</option>
+            <option value="3">-vvv (debug)</option>
+            <option value="4">-vvvv (connection debug)</option>
+          </select>
         </div>
       </div>
       <div class="form-group" style="margin-top:12px;margin-bottom:0">

@@ -670,20 +670,19 @@ function renderPlaybooks() {
 
     const card = document.createElement('div');
     card.className = 'card';
-    card.style.cssText = 'cursor:default';
     card.innerHTML = `
       <div class="card-body">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px">
-          <div style="min-width:0;display:flex;align-items:center;gap:6px">
+        <div class="pb-card-header">
+          <div class="pb-card-title-section">
             <button class="btn btn-icon btn-sm" title="${p.is_favorite ? 'Remove from favorites' : 'Add to favorites'}" onclick="toggleFavorite(${p.id}, ${p.is_favorite})" style="color:${p.is_favorite ? '#ffc107' : 'var(--text-muted)'};border-color:${p.is_favorite ? 'rgba(255,193,7,0.3)' : 'var(--border-color)'}">
               ${starIcon}
             </button>
-            <div>
-              <div style="font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.name}</div>
-              <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${p.description || 'No description'}</div>
+            <div class="pb-card-title-text">
+              <div class="pb-card-name" title="${p.name}">${p.name}</div>
+              <div class="pb-card-desc" title="${p.description || ''}">${p.description || 'No description'}</div>
             </div>
           </div>
-          <div style="display:flex;gap:4px;flex-shrink:0">
+          <div class="pb-card-actions">
             ${isAdmin() ? `<button class="btn btn-icon btn-sm" title="Edit" onclick="openPlaybookModal(${p.id})">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             </button>` : ''}
@@ -704,9 +703,9 @@ function renderPlaybooks() {
             </button>` : ''}
           </div>
         </div>
-        <div style="display:flex;align-items:center;justify-content:space-between">
+        <div class="pb-card-footer">
           <div>${folderBadge}</div>
-          <div style="font-size:11px;color:var(--text-muted)">Updated ${fmtDate(p.updated_at)}</div>
+          <div class="pb-card-date">Updated ${fmtDate(p.updated_at)}</div>
         </div>
       </div>
     `;

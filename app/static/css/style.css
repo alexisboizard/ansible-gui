@@ -946,9 +946,126 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   border: 1px solid rgba(17, 205, 239, 0.2);
 }
 
+/* Playbooks grid container */
+.playbooks-grid {
+  flex: 1;
+  min-width: 0;
+}
+
+.playbooks-grid .grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+/* Playbook card specific styles */
+.playbooks-grid .card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.playbooks-grid .card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+/* Card header row with title and actions */
+.pb-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* Title section with star and text */
+.pb-card-title-section {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.pb-card-title-text {
+  min-width: 0;
+  flex: 1;
+}
+
+.pb-card-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.pb-card-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Actions buttons container */
+.pb-card-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Card footer with folder badge and date */
+.pb-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pb-card-date {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 @media (max-width: 768px) {
   .playbooks-layout { flex-direction: column; }
   .folders-panel { width: 100%; position: static; }
+
+  .playbooks-grid .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pb-card-header {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .pb-card-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .pb-card-actions .btn-icon {
+    padding: 6px;
+  }
+
+  .pb-card-actions .btn-icon svg {
+    width: 14px;
+    height: 14px;
+  }
 }
 
 /* RBAC: hide admin-only elements for readonly users */

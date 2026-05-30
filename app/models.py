@@ -62,7 +62,9 @@ class Playbook(db.Model):
     folder_id = db.Column(db.Integer, db.ForeignKey("folder.id"), nullable=True)
     is_favorite = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     folder = db.relationship("Folder", backref="playbooks")
 
@@ -88,7 +90,10 @@ class PlaybookVersion(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     created_by = db.Column(db.String(100), default="")
 
-    playbook = db.relationship("Playbook", backref=db.backref("versions", lazy="dynamic", cascade="all, delete-orphan"))
+    playbook = db.relationship(
+        "Playbook",
+        backref=db.backref("versions", lazy="dynamic", cascade="all, delete-orphan"),
+    )
 
     def to_dict(self):
         return {
@@ -278,19 +283,16 @@ class LocalUser(db.Model):
 
     def set_password(self, password):
         self.salt = os.urandom(16).hex()
-        self.password_hash = hashlib.sha256(
-            (self.salt + password).encode()
-        ).hexdigest()
+        self.password_hash = hashlib.sha256((self.salt + password).encode()).hexdigest()
 
     def check_password(self, password):
-        expected = hashlib.sha256(
-            (self.salt + password).encode()
-        ).hexdigest()
+        expected = hashlib.sha256((self.salt + password).encode()).hexdigest()
         return expected == self.password_hash
 
 
 class Role(db.Model):
     """Ansible roles from Galaxy, Git, or local sources."""
+
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)
     source = db.Column(db.String(50), default="galaxy")  # galaxy, git, local
@@ -306,22 +308,27 @@ class Role(db.Model):
             "source": self.source,
             "namespace": self.namespace,
             "version": self.version,
-            "installed_at": self.installed_at.isoformat() if self.installed_at else None,
+            "installed_at": (
+                self.installed_at.isoformat() if self.installed_at else None
+            ),
             "path": self.path,
         }
 
 
 class GroupVar(db.Model):
     """Variables for Ansible host groups."""
+
     id = db.Column(db.Integer, primary_key=True)
     group_name = db.Column(db.String(255), nullable=False)
     var_name = db.Column(db.String(255), nullable=False)
     var_value = db.Column(db.Text, default="")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     __table_args__ = (
-        db.UniqueConstraint('group_name', 'var_name', name='uix_group_var'),
+        db.UniqueConstraint("group_name", "var_name", name="uix_group_var"),
     )
 
     def to_dict(self):
@@ -337,15 +344,18 @@ class GroupVar(db.Model):
 
 class HostVar(db.Model):
     """Variables for specific hosts (by host name)."""
+
     id = db.Column(db.Integer, primary_key=True)
     host_name = db.Column(db.String(255), nullable=False)
     var_name = db.Column(db.String(255), nullable=False)
     var_value = db.Column(db.Text, default="")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     __table_args__ = (
-        db.UniqueConstraint('host_name', 'var_name', name='uix_host_var'),
+        db.UniqueConstraint("host_name", "var_name", name="uix_host_var"),
     )
 
     def to_dict(self):
@@ -361,13 +371,16 @@ class HostVar(db.Model):
 
 class DynamicInventory(db.Model):
     """Dynamic inventory scripts or plugins."""
+
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False, unique=True)
     inv_type = db.Column(db.String(50), default="script")  # script or plugin
     content = db.Column(db.Text, default="")
     enabled = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
     def to_dict(self):
         return {

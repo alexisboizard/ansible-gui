@@ -62,8 +62,13 @@ def _ldap_auth(username, password):
         if bind_dn and bind_pass:
             log.debug(f"LDAP: binding as service account {bind_dn}")
             try:
-                conn = Connection(server, user=bind_dn, password=bind_pass,
-                                  authentication=SIMPLE, auto_bind=True)
+                conn = Connection(
+                    server,
+                    user=bind_dn,
+                    password=bind_pass,
+                    authentication=SIMPLE,
+                    auto_bind=True,
+                )
             except LDAPBindError as e:
                 log.error(f"LDAP service account bind failed: {e}")
                 return False, None
@@ -80,8 +85,12 @@ def _ldap_auth(username, password):
         filt = user_filter.replace("{username}", username)
         log.debug(f"LDAP: searching base='{base_dn}' filter='{filt}'")
 
-        conn.search(base_dn, filt, search_scope=SUBTREE,
-                    attributes=["distinguishedName", "cn", "sAMAccountName"])
+        conn.search(
+            base_dn,
+            filt,
+            search_scope=SUBTREE,
+            attributes=["distinguishedName", "cn", "sAMAccountName"],
+        )
 
         if not conn.entries:
             log.debug(f"LDAP: user '{username}' not found")
@@ -95,8 +104,13 @@ def _ldap_auth(username, password):
         # Step 3: Try to bind as the user with their password
         log.debug(f"LDAP: attempting user bind for {user_dn}")
         try:
-            user_conn = Connection(server, user=user_dn, password=password,
-                                   authentication=SIMPLE, auto_bind=True)
+            user_conn = Connection(
+                server,
+                user=user_dn,
+                password=password,
+                authentication=SIMPLE,
+                auto_bind=True,
+            )
             if user_conn.bound:
                 user_conn.unbind()
                 return True, username
@@ -121,6 +135,7 @@ def get_role_for_user(username):
         return local.role or "admin"
     # LDAP user — use configured default role
     from app.models import Setting
+
     return Setting.get("ldap_default_role", "admin") or "admin"
 
 
@@ -145,6 +160,7 @@ def admin_required(f):
     def decorated(*args, **kwargs):
         if not session.get("user"):
             from flask import redirect, url_for
+
             return redirect(url_for("main.login_page"))
         if session.get("role") != "admin":
             return jsonify({"error": "Admin access required"}), 403

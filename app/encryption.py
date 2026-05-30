@@ -3,6 +3,7 @@ Encryption utilities for sensitive settings using Fernet symmetric encryption.
 The encryption key is generated on first run and stored in .encryption_key file
 or can be provided via ENCRYPTION_KEY environment variable.
 """
+
 import os
 import base64
 import logging
@@ -13,9 +14,7 @@ logger = logging.getLogger(__name__)
 
 _fernet = None
 _KEY_FILE = os.path.join(
-    os.path.dirname(os.path.dirname(__file__)),
-    "instance",
-    ".encryption_key"
+    os.path.dirname(os.path.dirname(__file__)), "instance", ".encryption_key"
 )
 
 # Prefix to identify encrypted values
@@ -105,7 +104,7 @@ def decrypt_value(ciphertext):
 
     try:
         f = _get_fernet()
-        encrypted_data = ciphertext[len(ENCRYPTED_PREFIX):].encode("utf-8")
+        encrypted_data = ciphertext[len(ENCRYPTED_PREFIX) :].encode("utf-8")
         decrypted = f.decrypt(encrypted_data)
         return decrypted.decode("utf-8")
     except InvalidToken:

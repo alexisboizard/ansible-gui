@@ -18,7 +18,7 @@ from flask import (
 
 from app import db
 from app.auth import authenticate, login_required, admin_required, get_role_for_user
-from app.models import Execution, Folder, Host, LocalUser, Playbook, Schedule, Setting
+from app.models import Execution, Folder, Host, LocalUser, Playbook, PlaybookVersion, Schedule, Setting
 
 bp = Blueprint("main", __name__)
 
@@ -339,13 +339,23 @@ def api_playbooks():
 def api_playbooks_create():
     data = request.get_json() or {}
     folder_id = data.get("folder_id") or None
+    content = data.get("content", "")
     playbook = Playbook(
         name=data.get("name", ""),
         description=data.get("description", ""),
-        content=data.get("content", ""),
+        content=content,
         folder_id=folder_id,
     )
     db.session.add(playbook)
+    db.session.flush()
+    # Create initial version
+    version = PlaybookVersion(
+        playbook_id=playbook.id,
+        version_num=1,
+        content=content,
+        created_by=session.get("user", "unknown"),
+    )
+    db.session.add(version)
     db.session.commit()
     return jsonify(playbook.to_dict()), 201
 
@@ -355,11 +365,29 @@ def api_playbooks_create():
 def api_playbooks_update(pb_id):
     pb = Playbook.query.get_or_404(pb_id)
     data = request.get_json() or {}
+    new_content = data.get("content", pb.content)
+    content_changed = new_content != pb.content
+
     pb.name = data.get("name", pb.name)
     pb.description = data.get("description", pb.description)
-    pb.content = data.get("content", pb.content)
+    pb.content = new_content
     pb.folder_id = data.get("folder_id", pb.folder_id) or None
     pb.updated_at = datetime.utcnow()
+
+    # Create new version if content changed
+    if content_changed:
+        last_version = PlaybookVersion.query.filter_by(playbook_id=pb.id).order_by(
+            PlaybookVersion.version_num.desc()
+        ).first()
+        next_num = (last_version.version_num + 1) if last_version else 1
+        version = PlaybookVersion(
+            playbook_id=pb.id,
+            version_num=next_num,
+            content=new_content,
+            created_by=session.get("user", "unknown"),
+        )
+        db.session.add(version)
+
     db.session.commit()
     return jsonify(pb.to_dict())
 
@@ -371,6 +399,55 @@ def api_playbooks_delete(pb_id):
     db.session.delete(pb)
     db.session.commit()
     return jsonify({"ok": True})
+
+
+# ──────────────────── PLAYBOOK VERSIONS ────────────────────
+
+@bp.route("/api/playbooks/<int:pb_id>/versions", methods=["GET"])
+@login_required
+def api_playbook_versions(pb_id):
+    pb = Playbook.query.get_or_404(pb_id)
+    versions = PlaybookVersion.query.filter_by(playbook_id=pb_id).order_by(
+        PlaybookVersion.version_num.desc()
+    ).limit(50).all()
+    return jsonify({
+        "playbook": {"id": pb.id, "name": pb.name},
+        "versions": [v.to_dict() for v in versions],
+    })
+
+
+@bp.route("/api/playbooks/<int:pb_id>/versions/<int:version_id>", methods=["GET"])
+@login_required
+def api_playbook_version_get(pb_id, version_id):
+    version = PlaybookVersion.query.filter_by(id=version_id, playbook_id=pb_id).first_or_404()
+    return jsonify(version.to_dict())
+
+
+@bp.route("/api/playbooks/<int:pb_id>/versions/<int:version_id>/restore", methods=["POST"])
+@admin_required
+def api_playbook_version_restore(pb_id, version_id):
+    pb = Playbook.query.get_or_404(pb_id)
+    version = PlaybookVersion.query.filter_by(id=version_id, playbook_id=pb_id).first_or_404()
+
+    # Create a new version with the restored content
+    last_version = PlaybookVersion.query.filter_by(playbook_id=pb_id).order_by(
+        PlaybookVersion.version_num.desc()
+    ).first()
+    next_num = (last_version.version_num + 1) if last_version else 1
+
+    new_version = PlaybookVersion(
+        playbook_id=pb.id,
+        version_num=next_num,
+        content=version.content,
+        created_by=f"{session.get('user', 'unknown')} (restored v{version.version_num})",
+    )
+    db.session.add(new_version)
+
+    pb.content = version.content
+    pb.updated_at = datetime.utcnow()
+    db.session.commit()
+
+    return jsonify({"ok": True, "version_num": next_num})
 
 
 @bp.route("/api/playbooks/<int:pb_id>/export", methods=["GET"])

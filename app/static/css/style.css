@@ -902,3 +902,16 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 
 /* RBAC: hide admin-only elements for readonly users */
 .role-readonly .admin-only { display: none !important; }
+
+/* History modal version items */
+.history-version-item {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.history-version-item:hover { background: var(--bg-hover); }
+.history-version-item.selected {
+  background: rgba(108, 99, 255, 0.1);
+  border-left: 3px solid var(--primary);
+}

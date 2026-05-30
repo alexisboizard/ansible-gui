@@ -524,6 +524,36 @@
   </div>
 </div>
 
+<!-- History Modal -->
+<div class="modal-overlay" id="history-modal">
+  <div class="modal-box" style="max-width:900px;height:80vh;display:flex;flex-direction:column">
+    <div class="modal-header">
+      <h3 class="modal-title">Version History — <span id="history-playbook-name"></span></h3>
+      <button class="modal-close" onclick="closeModal('history-modal')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" style="flex:1;overflow:hidden;display:flex;gap:16px;padding:16px">
+      <!-- Versions list -->
+      <div style="width:280px;flex-shrink:0;border:1px solid var(--border-color);border-radius:8px;overflow-y:auto;background:var(--bg-card)">
+        <div style="padding:10px 12px;border-bottom:1px solid var(--border-color);font-weight:600;font-size:13px;color:var(--text-secondary)">Versions</div>
+        <div id="history-versions-list"></div>
+      </div>
+      <!-- Version content / diff -->
+      <div id="history-diff-container" style="flex:1;display:none;flex-direction:column;border:1px solid var(--border-color);border-radius:8px;overflow:hidden;background:var(--bg-card)">
+        <div style="padding:10px 12px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center">
+          <span style="font-weight:600;font-size:13px">Viewing <span id="history-version-num"></span></span>
+          <button class="btn btn-primary btn-sm admin-only" id="history-restore-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+            Restore
+          </button>
+        </div>
+        <pre id="history-diff-content" class="output-terminal" style="flex:1;margin:0;border-radius:0;font-size:12px"></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Output Modal -->
 <div class="modal-overlay" id="output-modal">
   <div class="modal-box modal-xl">

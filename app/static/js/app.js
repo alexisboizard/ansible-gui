@@ -418,6 +418,9 @@ function renderPlaybooks() {
             ${isAdmin() ? `<button class="btn btn-icon btn-sm" title="Edit" onclick="openPlaybookModal(${p.id})">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             </button>` : ''}
+            <button class="btn btn-icon btn-sm" title="History" onclick="openHistoryModal(${p.id})" style="color:var(--info);border-color:rgba(17,205,239,0.3)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </button>
             <button class="btn btn-icon btn-sm" title="Export .yml" onclick="exportPlaybook(${p.id})">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             </button>
@@ -601,6 +604,93 @@ async function importPlaybooks() {
   } else {
     const err = await res.json().catch(() => ({}));
     toast(err.error || 'Import failed', 'error');
+  }
+}
+
+// ── Playbook History ──────────────────────────────────────────────────────────
+
+let historyPlaybookId = null;
+let historyVersions = [];
+let historyCurrentContent = '';
+
+async function openHistoryModal(pbId) {
+  historyPlaybookId = pbId;
+  const pb = playbooksData.find(p => p.id === pbId);
+  historyCurrentContent = pb ? pb.content : '';
+
+  document.getElementById('history-playbook-name').textContent = pb ? pb.name : '';
+  document.getElementById('history-versions-list').innerHTML = '<div style="padding:16px;color:var(--text-muted)">Loading...</div>';
+  document.getElementById('history-diff-container').style.display = 'none';
+
+  showModal('history-modal');
+
+  const res = await api('GET', `/api/playbooks/${pbId}/versions`);
+  if (!res.ok) {
+    document.getElementById('history-versions-list').innerHTML = '<div style="padding:16px;color:var(--danger)">Failed to load versions</div>';
+    return;
+  }
+
+  const data = await res.json();
+  historyVersions = data.versions || [];
+  renderHistoryVersions();
+}
+
+function renderHistoryVersions() {
+  const container = document.getElementById('history-versions-list');
+
+  if (historyVersions.length === 0) {
+    container.innerHTML = '<div style="padding:16px;color:var(--text-muted)">No version history yet</div>';
+    return;
+  }
+
+  container.innerHTML = '';
+  for (const v of historyVersions) {
+    const item = document.createElement('div');
+    item.className = 'history-version-item';
+    item.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <strong>v${v.version_num}</strong>
+          <span style="color:var(--text-muted);font-size:12px;margin-left:8px">${fmtDate(v.created_at)}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text-secondary)">${v.created_by}</div>
+      </div>
+    `;
+    item.onclick = () => selectHistoryVersion(v.id);
+    container.appendChild(item);
+  }
+}
+
+async function selectHistoryVersion(versionId) {
+  const version = historyVersions.find(v => v.id === versionId);
+  if (!version) return;
+
+  // Mark selected
+  document.querySelectorAll('.history-version-item').forEach(el => el.classList.remove('selected'));
+  event.currentTarget.classList.add('selected');
+
+  // Show diff
+  const diffContainer = document.getElementById('history-diff-container');
+  diffContainer.style.display = '';
+
+  document.getElementById('history-version-num').textContent = `v${version.version_num}`;
+  document.getElementById('history-restore-btn').onclick = () => restoreVersion(versionId, version.version_num);
+
+  // Simple diff view — show old content
+  const diffContent = document.getElementById('history-diff-content');
+  diffContent.textContent = version.content;
+}
+
+async function restoreVersion(versionId, versionNum) {
+  if (!confirm(`Restore version ${versionNum}? This will create a new version with the old content.`)) return;
+
+  const res = await api('POST', `/api/playbooks/${historyPlaybookId}/versions/${versionId}/restore`);
+  if (res.ok) {
+    toast(`Restored v${versionNum}`, 'success');
+    closeModal('history-modal');
+    loadPlaybooks();
+  } else {
+    toast('Failed to restore version', 'error');
   }
 }
 

@@ -68,6 +68,27 @@ class Playbook(db.Model):
         }
 
 
+class PlaybookVersion(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    playbook_id = db.Column(db.Integer, db.ForeignKey("playbook.id"), nullable=False)
+    version_num = db.Column(db.Integer, nullable=False)
+    content = db.Column(db.Text, default="")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by = db.Column(db.String(100), default="")
+
+    playbook = db.relationship("Playbook", backref=db.backref("versions", lazy="dynamic", cascade="all, delete-orphan"))
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "playbook_id": self.playbook_id,
+            "version_num": self.version_num,
+            "content": self.content,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "created_by": self.created_by,
+        }
+
+
 class Execution(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     playbook_id = db.Column(db.Integer, db.ForeignKey("playbook.id"), nullable=True)

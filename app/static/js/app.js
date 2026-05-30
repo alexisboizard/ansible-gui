@@ -2,17 +2,20 @@
 
 // ── Theme ────────────────────────────────────────────────────────────────────
 
+let userThemePreference = 'system'; // Track user preference from server
+
 function initTheme() {
+  // First use localStorage as fallback (for non-authenticated pages)
   const saved = localStorage.getItem('theme');
   if (saved) {
-    applyTheme(saved);
+    applyThemeVisual(saved);
   } else {
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    applyTheme(prefersDark ? 'dark' : 'light');
+    applyThemeVisual(prefersDark ? 'dark' : 'light');
   }
 }
 
-function applyTheme(theme) {
+function applyThemeVisual(theme) {
   const html = document.documentElement;
   html.classList.remove('dark-theme', 'light-theme');
   html.classList.add(theme === 'light' ? 'light-theme' : 'dark-theme');
@@ -20,9 +23,28 @@ function applyTheme(theme) {
   updateThemeIcon();
 }
 
-function toggleTheme() {
+function applyThemeFromPreference(preference) {
+  userThemePreference = preference;
+  let effectiveTheme = preference;
+  if (preference === 'system') {
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    effectiveTheme = prefersDark ? 'dark' : 'light';
+  }
+  applyThemeVisual(effectiveTheme);
+}
+
+async function toggleTheme() {
   const isLight = document.documentElement.classList.contains('light-theme');
-  applyTheme(isLight ? 'dark' : 'light');
+  const newTheme = isLight ? 'dark' : 'light';
+  applyThemeVisual(newTheme);
+
+  // Save to server for logged-in users
+  try {
+    await api('PUT', '/api/me/preferences', { theme: newTheme });
+    userThemePreference = newTheme;
+  } catch (e) {
+    // Fallback to localStorage only
+  }
 }
 
 function updateThemeIcon() {
@@ -548,6 +570,20 @@ function renderFolders() {
   allBtn.onclick = () => { activeFolderId = null; renderFolders(); renderPlaybooks(); };
   list.appendChild(allBtn);
 
+  // Favorites filter
+  const favorites = playbooksData.filter(p => p.is_favorite);
+  if (favorites.length > 0) {
+    const favBtn = document.createElement('button');
+    favBtn.className = `folder-item${activeFolderId === 'favorites' ? ' active' : ''}`;
+    favBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="${activeFolderId === 'favorites' ? '#ffc107' : 'none'}" stroke="#ffc107" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      <span class="folder-item-name">Favorites</span>
+      <span style="font-size:11px;color:var(--text-muted);margin-left:auto">${favorites.length}</span>
+    `;
+    favBtn.onclick = () => { activeFolderId = 'favorites'; renderFolders(); renderPlaybooks(); };
+    list.appendChild(favBtn);
+  }
+
   const unfiled = playbooksData.filter(p => !p.folder_id);
   if (unfiled.length > 0) {
     const unfiledBtn = document.createElement('button');
@@ -597,6 +633,9 @@ function renderPlaybooks() {
   let filtered = playbooksData;
   if (activeFolderId === null) {
     titleEl.textContent = 'All Playbooks';
+  } else if (activeFolderId === 'favorites') {
+    filtered = playbooksData.filter(p => p.is_favorite);
+    titleEl.textContent = 'Favorites';
   } else if (activeFolderId === 'unfiled') {
     filtered = playbooksData.filter(p => !p.folder_id);
     titleEl.textContent = 'Unfiled';
@@ -613,24 +652,42 @@ function renderPlaybooks() {
     return;
   }
 
+  // Sort: favorites first, then by name
+  filtered.sort((a, b) => {
+    if (a.is_favorite && !b.is_favorite) return -1;
+    if (!a.is_favorite && b.is_favorite) return 1;
+    return a.name.localeCompare(b.name);
+  });
+
   for (const p of filtered) {
     const folderBadge = p.folder_name
       ? `<span class="pb-folder-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:10px;height:10px"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>${p.folder_name}</span>`
       : '';
 
+    const starIcon = p.is_favorite
+      ? `<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`
+      : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
+
     const card = document.createElement('div');
     card.className = 'card';
-    card.style.cssText = 'cursor:default';
     card.innerHTML = `
       <div class="card-body">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px">
-          <div style="min-width:0">
-            <div style="font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.name}</div>
-            <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${p.description || 'No description'}</div>
+        <div class="pb-card-header">
+          <div class="pb-card-title-section">
+            <button class="btn btn-icon btn-sm" title="${p.is_favorite ? 'Remove from favorites' : 'Add to favorites'}" onclick="toggleFavorite(${p.id}, ${p.is_favorite})" style="color:${p.is_favorite ? '#ffc107' : 'var(--text-muted)'};border-color:${p.is_favorite ? 'rgba(255,193,7,0.3)' : 'var(--border-color)'}">
+              ${starIcon}
+            </button>
+            <div class="pb-card-title-text">
+              <div class="pb-card-name" title="${p.name}">${p.name}</div>
+              <div class="pb-card-desc" title="${p.description || ''}">${p.description || 'No description'}</div>
+            </div>
           </div>
-          <div style="display:flex;gap:4px;flex-shrink:0">
+          <div class="pb-card-actions">
             ${isAdmin() ? `<button class="btn btn-icon btn-sm" title="Edit" onclick="openPlaybookModal(${p.id})">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>` : ''}
+            ${isAdmin() ? `<button class="btn btn-icon btn-sm" title="Duplicate" onclick="duplicatePlaybook(${p.id})">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             </button>` : ''}
             <button class="btn btn-icon btn-sm" title="History" onclick="openHistoryModal(${p.id})" style="color:var(--info);border-color:rgba(17,205,239,0.3)">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -646,13 +703,37 @@ function renderPlaybooks() {
             </button>` : ''}
           </div>
         </div>
-        <div style="display:flex;align-items:center;justify-content:space-between">
+        <div class="pb-card-footer">
           <div>${folderBadge}</div>
-          <div style="font-size:11px;color:var(--text-muted)">Updated ${fmtDate(p.updated_at)}</div>
+          <div class="pb-card-date">Updated ${fmtDate(p.updated_at)}</div>
         </div>
       </div>
     `;
     container.appendChild(card);
+  }
+}
+
+async function toggleFavorite(pbId, currentState) {
+  const method = currentState ? 'DELETE' : 'POST';
+  const res = await api(method, `/api/playbooks/${pbId}/favorite`);
+  if (res.ok) {
+    toast(currentState ? 'Removed from favorites' : 'Added to favorites', 'success');
+    loadPlaybooks();
+  } else {
+    toast('Failed to update favorite', 'error');
+  }
+}
+
+async function duplicatePlaybook(pbId) {
+  const res = await api('POST', `/api/playbooks/${pbId}/duplicate`);
+  if (res.ok) {
+    const newPb = await res.json();
+    toast('Playbook duplicated', 'success');
+    loadPlaybooks();
+    // Open the new playbook in edit modal
+    setTimeout(() => openPlaybookModal(newPb.id), 300);
+  } else {
+    toast('Failed to duplicate playbook', 'error');
   }
 }
 
@@ -931,6 +1012,7 @@ function openRunModal(pbId) {
   document.getElementById('run-tags').value = '';
   document.getElementById('run-skip-tags').value = '';
   document.getElementById('run-check-mode').checked = false;
+  document.getElementById('run-verbosity').value = '0';
   showModal('run-modal');
 }
 
@@ -942,6 +1024,7 @@ async function executePlaybook() {
     tags: document.getElementById('run-tags').value.trim(),
     skip_tags: document.getElementById('run-skip-tags').value.trim(),
     check_mode: document.getElementById('run-check-mode').checked,
+    verbosity: parseInt(document.getElementById('run-verbosity').value) || 0,
   });
 
   if (res.ok) {
@@ -958,6 +1041,88 @@ async function executePlaybook() {
 // ── Executions ────────────────────────────────────────────────────────────────
 
 let outputPollTimer = null;
+let outputSocket = null;
+let currentExecutionId = null;
+let useWebSocket = true;  // Try WebSocket first, fallback to polling if unavailable
+
+function initSocket() {
+  // Initialize Socket.IO connection if not already connected
+  if (outputSocket && outputSocket.connected) return outputSocket;
+
+  try {
+    if (typeof io === 'undefined') {
+      console.warn('Socket.IO not loaded, falling back to polling');
+      useWebSocket = false;
+      return null;
+    }
+
+    outputSocket = io({
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 3,
+      reconnectionDelay: 1000,
+    });
+
+    outputSocket.on('connect', () => {
+      console.log('WebSocket connected');
+      useWebSocket = true;
+    });
+
+    outputSocket.on('connect_error', (error) => {
+      console.warn('WebSocket connection error, falling back to polling:', error.message);
+      useWebSocket = false;
+    });
+
+    outputSocket.on('disconnect', () => {
+      console.log('WebSocket disconnected');
+    });
+
+    // Handle real-time execution output
+    outputSocket.on('execution_output', (data) => {
+      if (data.execution_id === currentExecutionId) {
+        const out = document.getElementById('output-content');
+        if (out) {
+          // Append the new line to existing content
+          const currentText = out.textContent === 'Loading...' || out.textContent === '(no output)' ? '' : out.textContent;
+          out.textContent = currentText + data.line;
+          out.scrollTop = out.scrollHeight;
+        }
+      }
+    });
+
+    // Handle execution status changes
+    outputSocket.on('execution_status', (data) => {
+      if (data.execution_id === currentExecutionId) {
+        const statusEl = document.getElementById('output-status');
+        if (statusEl) {
+          statusEl.innerHTML = `<span class="badge ${statusBadge(data.status)}">${data.status}</span>`;
+        }
+
+        // Update output if provided (for initial state or final state)
+        if (data.output !== undefined) {
+          const out = document.getElementById('output-content');
+          if (out && (out.textContent === 'Loading...' || data.status === 'success' || data.status === 'failed')) {
+            out.textContent = data.output || '(no output)';
+            out.scrollTop = out.scrollHeight;
+          }
+        }
+
+        // If execution finished, leave the room
+        if (data.status !== 'running' && data.status !== 'pending') {
+          if (outputSocket && outputSocket.connected) {
+            outputSocket.emit('leave_execution', { execution_id: currentExecutionId });
+          }
+        }
+      }
+    });
+
+    return outputSocket;
+  } catch (e) {
+    console.warn('Failed to initialize WebSocket:', e);
+    useWebSocket = false;
+    return null;
+  }
+}
 
 async function loadExecutions() {
   const res = await api('GET', '/api/executions');
@@ -1005,9 +1170,37 @@ async function openOutputModal(execId) {
   document.getElementById('output-content').textContent = 'Loading...';
   showModal('output-modal');
 
-  if (outputPollTimer) clearInterval(outputPollTimer);
+  // Clean up any previous state
+  if (outputPollTimer) {
+    clearInterval(outputPollTimer);
+    outputPollTimer = null;
+  }
 
+  // Leave previous room if any
+  if (currentExecutionId && outputSocket && outputSocket.connected) {
+    outputSocket.emit('leave_execution', { execution_id: currentExecutionId });
+  }
+
+  currentExecutionId = execId;
+
+  // Initialize WebSocket and join room for this execution
+  const socket = initSocket();
+
+  if (socket && socket.connected && useWebSocket) {
+    // Use WebSocket for real-time updates
+    socket.emit('join_execution', { execution_id: execId });
+    // The server will send current state when we join
+  } else {
+    // Fallback to polling if WebSocket not available
+    startPolling(execId);
+  }
+}
+
+// Polling fallback for when WebSocket is unavailable
+async function startPolling(execId) {
   const poll = async () => {
+    if (currentExecutionId !== execId) return;  // Stale poll
+
     const res = await api('GET', `/api/executions/${execId}`);
     if (!res.ok) return;
     const e = await res.json();
@@ -1456,6 +1649,9 @@ function getActionBadge(action) {
     playbook_update: { label: 'Update', class: 'badge-warning' },
     playbook_delete: { label: 'Delete', class: 'badge-danger' },
     playbook_restore: { label: 'Restore', class: 'badge-info' },
+    playbook_favorite: { label: 'Favorite', class: 'badge-warning' },
+    playbook_unfavorite: { label: 'Unfavorite', class: 'badge-muted' },
+    playbook_duplicate: { label: 'Duplicate', class: 'badge-info' },
     playbooks_import: { label: 'Import', class: 'badge-info' },
     execution_start: { label: 'Execute', class: 'badge-success' },
     execution_cancel: { label: 'Cancel', class: 'badge-warning' },
@@ -1464,6 +1660,7 @@ function getActionBadge(action) {
     schedule_update: { label: 'Update', class: 'badge-warning' },
     schedule_delete: { label: 'Delete', class: 'badge-danger' },
     settings_update: { label: 'Settings', class: 'badge-warning' },
+    theme_preference_update: { label: 'Theme', class: 'badge-info' },
     user_create: { label: 'Create', class: 'badge-info' },
     user_update: { label: 'Update', class: 'badge-warning' },
     user_delete: { label: 'Delete', class: 'badge-danger' },
@@ -1494,9 +1691,17 @@ function showModal(id) {
 
 function closeModal(id) {
   document.getElementById(id).classList.remove('show');
-  if (id === 'output-modal' && outputPollTimer) {
-    clearInterval(outputPollTimer);
-    outputPollTimer = null;
+  if (id === 'output-modal') {
+    // Clean up polling timer
+    if (outputPollTimer) {
+      clearInterval(outputPollTimer);
+      outputPollTimer = null;
+    }
+    // Leave WebSocket room
+    if (currentExecutionId && outputSocket && outputSocket.connected) {
+      outputSocket.emit('leave_execution', { execution_id: currentExecutionId });
+    }
+    currentExecutionId = null;
   }
   if (id === 'pb-modal' && cmEditor) {
     cmEditor.toTextArea();
@@ -1543,6 +1748,10 @@ async function initMe() {
       currentRole = data.role || 'admin';
       if (currentRole !== 'admin') {
         document.body.classList.add('role-readonly');
+      }
+      // Apply theme from user preferences
+      if (data.theme_preference) {
+        applyThemeFromPreference(data.theme_preference);
       }
     }
   } catch (e) { /* ignore */ }
@@ -2110,6 +2319,297 @@ function ansibleHint(cm) {
   };
 }
 
+// ── Global Search (Ctrl+K) ────────────────────────────────────────────────────
+
+let searchDebounceTimer = null;
+let searchSelectedIndex = -1;
+let searchResults = [];
+const RECENT_SEARCHES_KEY = 'ansible_gui_recent_searches';
+
+function openSearchModal() {
+  const modal = document.getElementById('search-modal');
+  const input = document.getElementById('global-search-input');
+  modal.classList.add('show');
+  input.value = '';
+  input.focus();
+  searchSelectedIndex = -1;
+  searchResults = [];
+  document.getElementById('search-results').innerHTML = `
+    <div class="search-empty" id="search-empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <p>Type to search across all items</p>
+    </div>
+  `;
+  renderRecentSearches();
+}
+
+function closeSearchModal() {
+  document.getElementById('search-modal').classList.remove('show');
+  searchSelectedIndex = -1;
+  searchResults = [];
+}
+
+function getRecentSearches() {
+  try {
+    const stored = localStorage.getItem(RECENT_SEARCHES_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function addRecentSearch(item) {
+  let recent = getRecentSearches();
+  // Remove duplicates
+  recent = recent.filter(r => !(r.type === item.type && r.id === item.id));
+  // Add to beginning
+  recent.unshift(item);
+  // Keep only last 5
+  recent = recent.slice(0, 5);
+  localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(recent));
+}
+
+function renderRecentSearches() {
+  const container = document.getElementById('search-recent-container');
+  const list = document.getElementById('search-recent-list');
+  const recent = getRecentSearches();
+
+  if (recent.length === 0) {
+    container.style.display = 'none';
+    return;
+  }
+
+  container.style.display = '';
+  list.innerHTML = '';
+
+  recent.forEach((item, idx) => {
+    const el = document.createElement('div');
+    el.className = 'search-result-item';
+    el.setAttribute('data-index', `recent-${idx}`);
+    el.innerHTML = `
+      ${getSearchResultIcon(item.type)}
+      <div class="search-result-content">
+        <div class="search-result-name">${escapeHtml(item.name)}</div>
+        <div class="search-result-subtitle">${escapeHtml(item.subtitle || '')}</div>
+      </div>
+      <span class="search-result-type">${item.type}</span>
+    `;
+    el.onclick = () => navigateToSearchResult(item);
+    list.appendChild(el);
+  });
+}
+
+function getSearchResultIcon(type) {
+  const icons = {
+    host: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>',
+    playbook: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
+    execution: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+    schedule: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+  };
+  return `<div class="search-result-icon ${type}">${icons[type] || icons.host}</div>`;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+async function performSearch(query) {
+  if (!query.trim()) {
+    document.getElementById('search-results').innerHTML = `
+      <div class="search-empty" id="search-empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <p>Type to search across all items</p>
+      </div>
+    `;
+    searchResults = [];
+    searchSelectedIndex = -1;
+    document.getElementById('search-recent-container').style.display = '';
+    renderRecentSearches();
+    return;
+  }
+
+  document.getElementById('search-recent-container').style.display = 'none';
+
+  try {
+    const res = await api('GET', `/api/search?q=${encodeURIComponent(query)}`);
+    const data = await res.json();
+    renderSearchResults(data);
+  } catch (e) {
+    document.getElementById('search-results').innerHTML = `
+      <div class="search-empty">
+        <p>Search failed. Please try again.</p>
+      </div>
+    `;
+  }
+}
+
+function renderSearchResults(data) {
+  const container = document.getElementById('search-results');
+  searchResults = [];
+  let html = '';
+  let globalIndex = 0;
+
+  const categories = [
+    { key: 'hosts', label: 'Hosts', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>' },
+    { key: 'playbooks', label: 'Playbooks', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>' },
+    { key: 'executions', label: 'Executions', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>' },
+    { key: 'schedules', label: 'Schedules', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' },
+  ];
+
+  for (const cat of categories) {
+    const items = data[cat.key] || [];
+    if (items.length === 0) continue;
+
+    html += `<div class="search-category-header">${cat.icon} ${cat.label}</div>`;
+
+    for (const item of items) {
+      searchResults.push(item);
+      html += `
+        <div class="search-result-item" data-index="${globalIndex}" onclick="selectSearchResult(${globalIndex})">
+          ${getSearchResultIcon(item.type)}
+          <div class="search-result-content">
+            <div class="search-result-name">${escapeHtml(item.name)}</div>
+            <div class="search-result-subtitle">${escapeHtml(item.subtitle || '')}</div>
+          </div>
+          <span class="search-result-type">${item.type}</span>
+        </div>
+      `;
+      globalIndex++;
+    }
+  }
+
+  if (searchResults.length === 0) {
+    html = `
+      <div class="search-empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <p>No results found</p>
+      </div>
+    `;
+  }
+
+  container.innerHTML = html;
+  searchSelectedIndex = -1;
+}
+
+function selectSearchResult(index) {
+  if (index >= 0 && index < searchResults.length) {
+    navigateToSearchResult(searchResults[index]);
+  }
+}
+
+function navigateToSearchResult(item) {
+  addRecentSearch(item);
+  closeSearchModal();
+
+  switch (item.type) {
+    case 'host':
+      showPage('inventory');
+      // Highlight/scroll to host after page loads
+      setTimeout(() => {
+        const rows = document.querySelectorAll('#hosts-tbody tr');
+        rows.forEach(row => {
+          if (row.textContent.includes(item.name)) {
+            row.style.background = 'var(--accent-glow)';
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => { row.style.background = ''; }, 2000);
+          }
+        });
+      }, 200);
+      break;
+
+    case 'playbook':
+      showPage('playbooks');
+      // Open playbook modal for editing
+      setTimeout(() => {
+        const pb = playbooksData.find(p => p.id === item.id);
+        if (pb && isAdmin()) {
+          openPlaybookModal(item.id);
+        }
+      }, 300);
+      break;
+
+    case 'execution':
+      showPage('executions');
+      // Open output modal
+      setTimeout(() => {
+        openOutputModal(item.id);
+      }, 300);
+      break;
+
+    case 'schedule':
+      showPage('schedules');
+      // Highlight schedule row
+      setTimeout(() => {
+        const rows = document.querySelectorAll('#schedules-tbody tr');
+        rows.forEach(row => {
+          if (row.textContent.includes(item.name)) {
+            row.style.background = 'var(--accent-glow)';
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => { row.style.background = ''; }, 2000);
+          }
+        });
+      }, 200);
+      break;
+  }
+}
+
+function updateSearchSelection(direction) {
+  const items = document.querySelectorAll('.search-result-item');
+  if (items.length === 0) return;
+
+  // Remove current selection
+  items.forEach(item => item.classList.remove('selected'));
+
+  // Update index
+  if (direction === 'down') {
+    searchSelectedIndex = (searchSelectedIndex + 1) % items.length;
+  } else if (direction === 'up') {
+    searchSelectedIndex = searchSelectedIndex <= 0 ? items.length - 1 : searchSelectedIndex - 1;
+  }
+
+  // Apply selection
+  const selected = items[searchSelectedIndex];
+  if (selected) {
+    selected.classList.add('selected');
+    selected.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
+function handleSearchKeydown(e) {
+  if (e.key === 'Escape') {
+    closeSearchModal();
+    e.preventDefault();
+  } else if (e.key === 'ArrowDown') {
+    updateSearchSelection('down');
+    e.preventDefault();
+  } else if (e.key === 'ArrowUp') {
+    updateSearchSelection('up');
+    e.preventDefault();
+  } else if (e.key === 'Enter') {
+    if (searchSelectedIndex >= 0 && searchSelectedIndex < searchResults.length) {
+      navigateToSearchResult(searchResults[searchSelectedIndex]);
+    } else {
+      // Check if we're in recent searches
+      const recentItems = document.querySelectorAll('#search-recent-list .search-result-item.selected');
+      if (recentItems.length > 0) {
+        recentItems[0].click();
+      }
+    }
+    e.preventDefault();
+  }
+}
+
+// Initialize global search
+document.addEventListener('keydown', (e) => {
+  // Ctrl+K or Cmd+K
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    openSearchModal();
+  }
+});
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -2117,4 +2617,27 @@ document.addEventListener('DOMContentLoaded', async () => {
   await initMe();
   loadAnsibleModules();
   showPage('dashboard');
+
+  // Setup search modal events
+  const searchInput = document.getElementById('global-search-input');
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = setTimeout(() => {
+        performSearch(e.target.value);
+      }, 300);
+    });
+
+    searchInput.addEventListener('keydown', handleSearchKeydown);
+  }
+
+  // Close search modal on overlay click
+  const searchModal = document.getElementById('search-modal');
+  if (searchModal) {
+    searchModal.addEventListener('click', (e) => {
+      if (e.target === searchModal) {
+        closeSearchModal();
+      }
+    });
+  }
 });

@@ -5,8 +5,35 @@ import subprocess
 import tempfile
 from datetime import datetime
 
-from app import db
+from app import db, socketio
 from app.models import Execution, GroupVar, Host, HostVar, Setting
+
+
+def emit_execution_output(execution_id, line):
+    """Emit a line of output via WebSocket to clients watching this execution."""
+    try:
+        socketio.emit(
+            'execution_output',
+            {'execution_id': execution_id, 'line': line},
+            room=f'execution_{execution_id}'
+        )
+    except Exception:
+        pass  # Fail silently if WebSocket not available
+
+
+def emit_execution_status(execution_id, status, output=None):
+    """Emit status change via WebSocket to clients watching this execution."""
+    try:
+        data = {'execution_id': execution_id, 'status': status}
+        if output is not None:
+            data['output'] = output
+        socketio.emit(
+            'execution_status',
+            data,
+            room=f'execution_{execution_id}'
+        )
+    except Exception:
+        pass  # Fail silently if WebSocket not available
 
 
 def sanitize_group_name(name):
@@ -121,9 +148,16 @@ def run_playbook(execution_id):
             if execution.skip_tags and execution.skip_tags.strip():
                 cmd += ["--skip-tags", execution.skip_tags.strip()]
 
+            # Add verbosity flags
+            if execution.verbosity and execution.verbosity > 0:
+                cmd += ["-" + "v" * execution.verbosity]
+
             execution.status = "running"
             execution.output = ""
             db.session.commit()
+
+            # Emit status change via WebSocket
+            emit_execution_status(execution_id, "running")
 
             process = subprocess.Popen(
                 cmd,
@@ -137,13 +171,22 @@ def run_playbook(execution_id):
             for line in iter(process.stdout.readline, ""):
                 execution.output += line
                 db.session.commit()
+                # Emit each line via WebSocket for real-time output
+                emit_execution_output(execution_id, line)
 
             process.wait()
             execution.status = "success" if process.returncode == 0 else "failed"
 
+            # Emit final status via WebSocket
+            emit_execution_status(execution_id, execution.status, execution.output)
+
         except Exception as e:
             execution.status = "failed"
-            execution.output += f"\n[ERROR] {e}"
+            error_msg = f"\n[ERROR] {e}"
+            execution.output += error_msg
+            # Emit error via WebSocket
+            emit_execution_output(execution_id, error_msg)
+            emit_execution_status(execution_id, "failed", execution.output)
         finally:
             execution.finished_at = datetime.utcnow()
             db.session.commit()

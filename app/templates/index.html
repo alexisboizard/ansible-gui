@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ansible GUI</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/favicon.svg') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/favicon.svg') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
@@ -106,6 +108,11 @@
     <div class="topbar">
       <span class="topbar-title" id="topbar-title">Dashboard</span>
       <div class="topbar-actions">
+        <button class="topbar-search-btn" onclick="openSearchModal()" title="Search (Ctrl+K)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <span>Search...</span>
+          <kbd>Ctrl+K</kbd>
+        </button>
         <div class="user-badge">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
           {{ user }}
@@ -333,7 +340,7 @@
         </aside>
 
         <!-- Playbooks area -->
-        <div style="flex:1;min-width:0">
+        <div class="playbooks-grid">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:8px;flex-wrap:wrap">
             <h3 class="card-title" id="playbooks-folder-title" style="margin:0">All Playbooks</h3>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -351,7 +358,7 @@
               </button>
             </div>
           </div>
-          <div id="playbooks-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
+          <div id="playbooks-grid" class="grid">
             <div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:24px">Loading...</div>
           </div>
         </div>
@@ -710,7 +717,7 @@
         <textarea class="form-control" id="run-extra-vars" rows="3" placeholder='key=value or {"key": "value"}'></textarea>
         <div style="font-size:11px;color:var(--text-muted);margin-top:4px">JSON or key=value pairs passed as --extra-vars</div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
         <div class="form-group" style="margin:0">
           <label class="form-label">Tags <span style="color:var(--text-muted);font-weight:400;text-transform:none">(optional)</span></label>
           <input type="text" class="form-control" id="run-tags" placeholder="deploy,configure">
@@ -718,6 +725,16 @@
         <div class="form-group" style="margin:0">
           <label class="form-label">Skip Tags <span style="color:var(--text-muted);font-weight:400;text-transform:none">(optional)</span></label>
           <input type="text" class="form-control" id="run-skip-tags" placeholder="debug">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Verbosity</label>
+          <select class="form-control" id="run-verbosity">
+            <option value="0">Normal</option>
+            <option value="1">-v (verbose)</option>
+            <option value="2">-vv (more verbose)</option>
+            <option value="3">-vvv (debug)</option>
+            <option value="4">-vvvv (connection debug)</option>
+          </select>
         </div>
       </div>
       <div class="form-group" style="margin-top:12px;margin-bottom:0">
@@ -1156,7 +1173,36 @@
 <!-- Toast Container -->
 <div class="toast-container" id="toast-container"></div>
 
+<!-- Global Search Modal (Ctrl+K) -->
+<div class="search-modal-overlay" id="search-modal">
+  <div class="search-modal">
+    <div class="search-modal-input-wrapper">
+      <svg class="search-modal-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input type="text" class="search-modal-input" id="global-search-input" placeholder="Search hosts, playbooks, executions, schedules..." autocomplete="off">
+      <kbd class="search-modal-shortcut">ESC</kbd>
+    </div>
+    <div class="search-modal-body" id="search-modal-body">
+      <div class="search-recent" id="search-recent-container">
+        <div class="search-category-header">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Recent Searches
+        </div>
+        <div id="search-recent-list"></div>
+      </div>
+      <div class="search-results" id="search-results">
+        <div class="search-empty" id="search-empty">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <p>Type to search across all items</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/yaml/yaml.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>

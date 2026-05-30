@@ -7,16 +7,35 @@ import threading
 import zipfile
 from datetime import datetime, timedelta
 
-from flask import (Blueprint, Response, jsonify, redirect, render_template,
-                   request, session, url_for)
+from flask import (
+    Blueprint,
+    Response,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
 from flask_socketio import join_room, leave_room
 
 from app import db, socketio
-from app.auth import (admin_required, authenticate, get_role_for_user,
-                      login_required)
-from app.models import (AuditLog, DynamicInventory, Execution, Folder,
-                        GroupVar, Host, HostVar, LocalUser, Playbook,
-                        PlaybookVersion, Role, Schedule, Setting)
+from app.auth import admin_required, authenticate, get_role_for_user, login_required
+from app.models import (
+    AuditLog,
+    DynamicInventory,
+    Execution,
+    Folder,
+    GroupVar,
+    Host,
+    HostVar,
+    LocalUser,
+    Playbook,
+    PlaybookVersion,
+    Role,
+    Schedule,
+    Setting,
+)
 
 APP_VERSION = "1.0.0"
 

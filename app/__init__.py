@@ -168,10 +168,10 @@ def create_app():
     db.init_app(app)
 
     # Initialize SocketIO with the app
-    # async_mode='eventlet' for production, 'threading' for development fallback
+    # async_mode='gevent' for production, 'threading' for development fallback
     socketio.init_app(
         app,
-        async_mode='eventlet',
+        async_mode='gevent',
         cors_allowed_origins="*",
         logger=False,
         engineio_logger=False

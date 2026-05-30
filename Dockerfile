@@ -28,5 +28,5 @@ RUN echo "${VERSION}" > /app/VERSION
 
 EXPOSE 5000
 
-# Use eventlet for WebSocket support
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--worker-class", "eventlet", "run:app"]
+# Use gevent for WebSocket support
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--worker-class", "gevent", "run:app"]

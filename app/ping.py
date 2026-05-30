@@ -54,8 +54,7 @@ def ping_host(host):
         ssh_private_key = Setting.get("ssh_private_key", "")
         if ssh_private_key and ssh_private_key.strip():
             key_content = (
-                ssh_private_key.replace("\r\n", "\n").replace("\r", "\n").strip()
-                + "\n"
+                ssh_private_key.replace("\r\n", "\n").replace("\r", "\n").strip() + "\n"
             )
             ssh_dir = os.path.join(work_dir, ".ssh")
             os.makedirs(ssh_dir, exist_ok=True)
@@ -94,6 +93,7 @@ def ping_host(host):
         host.ping_latency = None
     finally:
         import shutil
+
         shutil.rmtree(work_dir, ignore_errors=True)
 
     db.session.commit()

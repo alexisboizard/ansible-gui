@@ -13,9 +13,9 @@ def emit_execution_output(execution_id, line):
     """Emit a line of output via WebSocket to clients watching this execution."""
     try:
         socketio.emit(
-            'execution_output',
-            {'execution_id': execution_id, 'line': line},
-            room=f'execution_{execution_id}'
+            "execution_output",
+            {"execution_id": execution_id, "line": line},
+            room=f"execution_{execution_id}",
         )
     except Exception:
         pass  # Fail silently if WebSocket not available
@@ -24,14 +24,10 @@ def emit_execution_output(execution_id, line):
 def emit_execution_status(execution_id, status, output=None):
     """Emit status change via WebSocket to clients watching this execution."""
     try:
-        data = {'execution_id': execution_id, 'status': status}
+        data = {"execution_id": execution_id, "status": status}
         if output is not None:
-            data['output'] = output
-        socketio.emit(
-            'execution_status',
-            data,
-            room=f'execution_{execution_id}'
-        )
+            data["output"] = output
+        socketio.emit("execution_status", data, room=f"execution_{execution_id}")
     except Exception:
         pass  # Fail silently if WebSocket not available
 
@@ -82,6 +78,7 @@ def run_playbook(execution_id):
                 for host_name, vars_dict in host_vars_data.items():
                     host_vars_file = os.path.join(host_vars_dir, f"{host_name}.yml")
                     import yaml
+
                     with open(host_vars_file, "w") as f:
                         yaml.dump(vars_dict, f, default_flow_style=False)
 
@@ -97,10 +94,15 @@ def run_playbook(execution_id):
 
             # Set roles path to include installed roles
             from flask import current_app
+
             roles_path = os.path.join(current_app.instance_path, "roles")
             if os.path.isdir(roles_path):
                 existing_roles_path = env.get("ANSIBLE_ROLES_PATH", "")
-                env["ANSIBLE_ROLES_PATH"] = f"{roles_path}:{existing_roles_path}" if existing_roles_path else roles_path
+                env["ANSIBLE_ROLES_PATH"] = (
+                    f"{roles_path}:{existing_roles_path}"
+                    if existing_roles_path
+                    else roles_path
+                )
 
             # SSH key
             ssh_private_key = Setting.get("ssh_private_key", "")
@@ -129,7 +131,8 @@ def run_playbook(execution_id):
 
             cmd = [
                 "ansible-playbook",
-                "-i", inventory_path,
+                "-i",
+                inventory_path,
                 playbook_path,
             ]
 
@@ -193,13 +196,16 @@ def run_playbook(execution_id):
 
             try:
                 from app.notify import notify_execution
+
                 notify_execution(execution)
             except Exception as e:
                 import logging
+
                 logging.getLogger(__name__).error(f"Notification error: {e}")
 
             # Cleanup
             import shutil
+
             try:
                 shutil.rmtree(work_dir, ignore_errors=True)
             except Exception:
@@ -233,7 +239,9 @@ def _build_inventory(host_pattern):
                 if p == host.name or p == host.address:
                     match = True
                     break
-                host_groups = [g.strip() for g in (host.groups or "").split(",") if g.strip()]
+                host_groups = [
+                    g.strip() for g in (host.groups or "").split(",") if g.strip()
+                ]
                 if p in host_groups:
                     match = True
                     break
@@ -300,7 +308,7 @@ def _build_inventory(host_pattern):
         for var_name, var_value in vars_list:
             # Handle values with spaces or special characters
             if " " in var_value or "=" in var_value:
-                lines.append(f"{var_name}=\"{var_value}\"")
+                lines.append(f'{var_name}="{var_value}"')
             else:
                 lines.append(f"{var_name}={var_value}")
         lines.append("")

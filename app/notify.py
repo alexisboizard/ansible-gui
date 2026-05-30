@@ -35,7 +35,9 @@ def notify_execution(execution):
         use_tls = Setting.get("smtp_tls", "true") == "true"
 
         status_emoji = "✅" if execution.status == "success" else "❌"
-        subject = f"{status_emoji} Ansible: {execution.playbook_name} — {execution.status}"
+        subject = (
+            f"{status_emoji} Ansible: {execution.playbook_name} — {execution.status}"
+        )
 
         body = f"""Playbook execution completed.
 

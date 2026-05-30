@@ -21,30 +21,66 @@ from flask_socketio import join_room, leave_room
 
 from app import db, socketio
 from app.auth import authenticate, login_required, admin_required, get_role_for_user
-from app.models import AuditLog, DynamicInventory, Execution, Folder, GroupVar, Host, HostVar, LocalUser, Playbook, PlaybookVersion, Role, Schedule, Setting
+from app.models import (
+    AuditLog,
+    DynamicInventory,
+    Execution,
+    Folder,
+    GroupVar,
+    Host,
+    HostVar,
+    LocalUser,
+    Playbook,
+    PlaybookVersion,
+    Role,
+    Schedule,
+    Setting,
+)
 
 APP_VERSION = "1.0.0"
 
 bp = Blueprint("main", __name__)
 
-SENSITIVE_KEYS = {"ldap_bind_password", "smtp_password", "ssh_private_key", "ssh_default_password", "vault_password"}
+SENSITIVE_KEYS = {
+    "ldap_bind_password",
+    "smtp_password",
+    "ssh_private_key",
+    "ssh_default_password",
+    "vault_password",
+}
 
 SETTINGS_SCHEMA = [
     {
         "category": "auth",
         "label": "Authentication (LDAP + Local)",
         "fields": [
-            {"key": "ldap_server", "label": "LDAP Server", "type": "text",
-             "hint": "Leave empty to use local auth only. If set, LDAP is tried first, then local."},
+            {
+                "key": "ldap_server",
+                "label": "LDAP Server",
+                "type": "text",
+                "hint": "Leave empty to use local auth only. If set, LDAP is tried first, then local.",
+            },
             {"key": "ldap_port", "label": "LDAP Port", "type": "text"},
             {"key": "ldap_base_dn", "label": "Base DN", "type": "text"},
-            {"key": "ldap_bind_dn", "label": "Bind DN (service account)", "type": "text"},
+            {
+                "key": "ldap_bind_dn",
+                "label": "Bind DN (service account)",
+                "type": "text",
+            },
             {"key": "ldap_bind_password", "label": "Bind Password", "type": "password"},
             {"key": "ldap_user_filter", "label": "User Filter", "type": "text"},
-            {"key": "ldap_use_ssl", "label": "Use SSL/TLS", "type": "select",
-             "options": [("false", "No"), ("true", "Yes")]},
-            {"key": "ldap_default_role", "label": "Default Role for LDAP Users", "type": "select",
-             "options": [("admin", "Admin"), ("readonly", "Read Only")]},
+            {
+                "key": "ldap_use_ssl",
+                "label": "Use SSL/TLS",
+                "type": "select",
+                "options": [("false", "No"), ("true", "Yes")],
+            },
+            {
+                "key": "ldap_default_role",
+                "label": "Default Role for LDAP Users",
+                "type": "select",
+                "options": [("admin", "Admin"), ("readonly", "Read Only")],
+            },
         ],
     },
     {
@@ -56,13 +92,29 @@ SETTINGS_SCHEMA = [
             {"key": "smtp_user", "label": "SMTP User", "type": "text"},
             {"key": "smtp_password", "label": "SMTP Password", "type": "password"},
             {"key": "smtp_from", "label": "From Address", "type": "text"},
-            {"key": "smtp_tls", "label": "Use TLS", "type": "select",
-             "options": [("true", "Yes"), ("false", "No")]},
-            {"key": "notify_on_failure", "label": "Notify on Failure", "type": "select",
-             "options": [("true", "Yes"), ("false", "No")]},
-            {"key": "notify_on_success", "label": "Notify on Success", "type": "select",
-             "options": [("true", "Yes"), ("false", "No")]},
-            {"key": "notify_emails", "label": "Recipient Emails (comma-separated)", "type": "text"},
+            {
+                "key": "smtp_tls",
+                "label": "Use TLS",
+                "type": "select",
+                "options": [("true", "Yes"), ("false", "No")],
+            },
+            {
+                "key": "notify_on_failure",
+                "label": "Notify on Failure",
+                "type": "select",
+                "options": [("true", "Yes"), ("false", "No")],
+            },
+            {
+                "key": "notify_on_success",
+                "label": "Notify on Success",
+                "type": "select",
+                "options": [("true", "Yes"), ("false", "No")],
+            },
+            {
+                "key": "notify_emails",
+                "label": "Recipient Emails (comma-separated)",
+                "type": "text",
+            },
         ],
     },
     {
@@ -70,32 +122,53 @@ SETTINGS_SCHEMA = [
         "label": "SSH / Connection",
         "fields": [
             {"key": "ssh_default_user", "label": "Default SSH User", "type": "text"},
-            {"key": "ssh_default_password", "label": "Default SSH Password", "type": "password"},
-            {"key": "ssh_private_key", "label": "SSH Private Key (PEM)", "type": "textarea"},
+            {
+                "key": "ssh_default_password",
+                "label": "Default SSH Password",
+                "type": "password",
+            },
+            {
+                "key": "ssh_private_key",
+                "label": "SSH Private Key (PEM)",
+                "type": "textarea",
+            },
         ],
     },
     {
         "category": "vault",
         "label": "Ansible Vault",
         "fields": [
-            {"key": "vault_password", "label": "Vault Password", "type": "password",
-             "hint": "Password used to decrypt ansible-vault encrypted variables in playbooks"},
+            {
+                "key": "vault_password",
+                "label": "Vault Password",
+                "type": "password",
+                "hint": "Password used to decrypt ansible-vault encrypted variables in playbooks",
+            },
         ],
     },
     {
         "category": "system",
         "label": "System",
         "fields": [
-            {"key": "ping_interval", "label": "Ping Interval (seconds)", "type": "text"},
+            {
+                "key": "ping_interval",
+                "label": "Ping Interval (seconds)",
+                "type": "text",
+            },
             {"key": "ping_timeout", "label": "Ping Timeout (seconds)", "type": "text"},
-            {"key": "max_concurrent_executions", "label": "Max Concurrent Executions", "type": "text",
-             "hint": "Maximum number of playbook executions that can run simultaneously (default: 5)"},
+            {
+                "key": "max_concurrent_executions",
+                "label": "Max Concurrent Executions",
+                "type": "text",
+                "hint": "Maximum number of playbook executions that can run simultaneously (default: 5)",
+            },
         ],
     },
 ]
 
 
 # ──────────────────── AUDIT HELPER ────────────────────
+
 
 def audit(action, target_type="", target_id=None, target_name="", details=None):
     """Log an audit event."""
@@ -117,6 +190,7 @@ def audit(action, target_type="", target_id=None, target_name="", details=None):
 
 # ──────────────────── AUTH ────────────────────
 
+
 @bp.route("/login", methods=["GET"])
 def login_page():
     if session.get("user"):
@@ -127,6 +201,7 @@ def login_page():
 @bp.route("/api/login", methods=["POST"])
 def api_login():
     from app.models import LocalUser
+
     data = request.get_json() or {}
     username = data.get("username", "").strip()
     password = data.get("password", "")
@@ -139,6 +214,7 @@ def api_login():
             local = LocalUser(username=username, role=default_role)
             # Unusable password hash — LDAP handles auth, this record is role-only
             import os as _os
+
             local.salt = _os.urandom(16).hex()
             local.password_hash = "ldap:cannot-login-locally"
             db.session.add(local)
@@ -162,11 +238,13 @@ def api_logout():
 @login_required
 def api_me():
     user = LocalUser.query.filter_by(username=session.get("user")).first()
-    return jsonify({
-        "username": session.get("user"),
-        "role": session.get("role", "admin"),
-        "theme_preference": user.theme_preference if user else "system",
-    })
+    return jsonify(
+        {
+            "username": session.get("user"),
+            "role": session.get("role", "admin"),
+            "theme_preference": user.theme_preference if user else "system",
+        }
+    )
 
 
 @bp.route("/api/me/preferences", methods=["PUT"])
@@ -180,7 +258,9 @@ def api_me_preferences():
     if theme in ("dark", "light", "system"):
         user.theme_preference = theme
         db.session.commit()
-        audit("theme_preference_update", "user", user.id, user.username, {"theme": theme})
+        audit(
+            "theme_preference_update", "user", user.id, user.username, {"theme": theme}
+        )
     return jsonify({"ok": True, "theme_preference": user.theme_preference})
 
 
@@ -191,6 +271,7 @@ def index():
 
 
 # ──────────────────── DASHBOARD ────────────────────
+
 
 @bp.route("/api/dashboard")
 @login_required
@@ -209,15 +290,17 @@ def api_dashboard():
     ).count()
     max_concurrent = int(Setting.get("max_concurrent_executions", "5") or 5)
 
-    return jsonify({
-        "total_hosts": total_hosts,
-        "reachable_hosts": reachable_hosts,
-        "total_playbooks": total_playbooks,
-        "total_executions": total_executions,
-        "recent_executions": [e.to_dict() for e in recent_executions],
-        "running_executions": running_count,
-        "max_concurrent_executions": max_concurrent,
-    })
+    return jsonify(
+        {
+            "total_hosts": total_hosts,
+            "reachable_hosts": reachable_hosts,
+            "total_playbooks": total_playbooks,
+            "total_executions": total_executions,
+            "recent_executions": [e.to_dict() for e in recent_executions],
+            "running_executions": running_count,
+            "max_concurrent_executions": max_concurrent,
+        }
+    )
 
 
 @bp.route("/api/stats")
@@ -258,19 +341,21 @@ def api_stats():
     for i in range(30):
         day = (datetime.utcnow() - timedelta(days=29 - i)).strftime("%Y-%m-%d")
         day_data = executions_by_day.get(day, {"total": 0, "success": 0, "failed": 0})
-        executions_per_day.append({
-            "date": day,
-            "total": day_data["total"],
-            "success": day_data["success"],
-            "failed": day_data["failed"],
-        })
+        executions_per_day.append(
+            {
+                "date": day,
+                "total": day_data["total"],
+                "success": day_data["success"],
+                "failed": day_data["failed"],
+            }
+        )
 
     # Top 5 most executed playbooks
     from sqlalchemy import func
+
     top_playbooks_query = (
         db.session.query(
-            Execution.playbook_name,
-            func.count(Execution.id).label("count")
+            Execution.playbook_name, func.count(Execution.id).label("count")
         )
         .filter(Execution.playbook_name.isnot(None))
         .group_by(Execution.playbook_name)
@@ -278,21 +363,26 @@ def api_stats():
         .limit(5)
         .all()
     )
-    top_playbooks = [{"name": name, "count": count} for name, count in top_playbooks_query]
+    top_playbooks = [
+        {"name": name, "count": count} for name, count in top_playbooks_query
+    ]
 
-    return jsonify({
-        "total_hosts": total_hosts,
-        "total_playbooks": total_playbooks,
-        "total_executions": total_executions,
-        "success_count": success_count,
-        "failed_count": failed_count,
-        "other_count": other_count,
-        "executions_per_day": executions_per_day,
-        "top_playbooks": top_playbooks,
-    })
+    return jsonify(
+        {
+            "total_hosts": total_hosts,
+            "total_playbooks": total_playbooks,
+            "total_executions": total_executions,
+            "success_count": success_count,
+            "failed_count": failed_count,
+            "other_count": other_count,
+            "executions_per_day": executions_per_day,
+            "top_playbooks": top_playbooks,
+        }
+    )
 
 
 # ──────────────────── HOSTS ────────────────────
+
 
 @bp.route("/api/hosts", methods=["GET"])
 @login_required
@@ -333,7 +423,9 @@ def api_hosts_update(host_id):
     host.name = data.get("name", host.name)
     host.address = data.get("address", host.address)
     host.groups = data.get("groups", host.groups)
-    host.variables = json.dumps(data.get("variables", json.loads(host.variables or "{}")))
+    host.variables = json.dumps(
+        data.get("variables", json.loads(host.variables or "{}"))
+    )
     host.os_type = data.get("os_type", host.os_type)
     db.session.commit()
     audit("host_update", "host", host.id, host.name)
@@ -356,6 +448,7 @@ def api_hosts_delete(host_id):
 def api_hosts_ping():
     from app.ping import ping_all_hosts
     from flask import current_app
+
     app = current_app._get_current_object()
 
     def _run():
@@ -421,6 +514,7 @@ def api_hosts_import():
 
 # ──────────────────── FOLDERS ────────────────────
 
+
 @bp.route("/api/folders", methods=["GET"])
 @login_required
 def api_folders():
@@ -474,6 +568,7 @@ def api_folders_delete(folder_id):
 
 # ──────────────────── PLAYBOOKS ────────────────────
 
+
 @bp.route("/api/playbooks", methods=["GET"])
 @login_required
 def api_playbooks():
@@ -524,9 +619,11 @@ def api_playbooks_update(pb_id):
 
     # Create new version if content changed
     if content_changed:
-        last_version = PlaybookVersion.query.filter_by(playbook_id=pb.id).order_by(
-            PlaybookVersion.version_num.desc()
-        ).first()
+        last_version = (
+            PlaybookVersion.query.filter_by(playbook_id=pb.id)
+            .order_by(PlaybookVersion.version_num.desc())
+            .first()
+        )
         next_num = (last_version.version_num + 1) if last_version else 1
         version = PlaybookVersion(
             playbook_id=pb.id,
@@ -537,7 +634,13 @@ def api_playbooks_update(pb_id):
         db.session.add(version)
 
     db.session.commit()
-    audit("playbook_update", "playbook", pb.id, pb.name, {"content_changed": content_changed})
+    audit(
+        "playbook_update",
+        "playbook",
+        pb.id,
+        pb.name,
+        {"content_changed": content_changed},
+    )
     return jsonify(pb.to_dict())
 
 
@@ -605,42 +708,62 @@ def api_playbooks_duplicate(pb_id):
     db.session.add(version)
     db.session.commit()
 
-    audit("playbook_duplicate", "playbook", new_pb.id, new_pb.name, {"source_id": pb.id, "source_name": pb.name})
+    audit(
+        "playbook_duplicate",
+        "playbook",
+        new_pb.id,
+        new_pb.name,
+        {"source_id": pb.id, "source_name": pb.name},
+    )
     return jsonify(new_pb.to_dict()), 201
 
 
 # ──────────────────── PLAYBOOK VERSIONS ────────────────────
 
+
 @bp.route("/api/playbooks/<int:pb_id>/versions", methods=["GET"])
 @login_required
 def api_playbook_versions(pb_id):
     pb = Playbook.query.get_or_404(pb_id)
-    versions = PlaybookVersion.query.filter_by(playbook_id=pb_id).order_by(
-        PlaybookVersion.version_num.desc()
-    ).limit(50).all()
-    return jsonify({
-        "playbook": {"id": pb.id, "name": pb.name},
-        "versions": [v.to_dict() for v in versions],
-    })
+    versions = (
+        PlaybookVersion.query.filter_by(playbook_id=pb_id)
+        .order_by(PlaybookVersion.version_num.desc())
+        .limit(50)
+        .all()
+    )
+    return jsonify(
+        {
+            "playbook": {"id": pb.id, "name": pb.name},
+            "versions": [v.to_dict() for v in versions],
+        }
+    )
 
 
 @bp.route("/api/playbooks/<int:pb_id>/versions/<int:version_id>", methods=["GET"])
 @login_required
 def api_playbook_version_get(pb_id, version_id):
-    version = PlaybookVersion.query.filter_by(id=version_id, playbook_id=pb_id).first_or_404()
+    version = PlaybookVersion.query.filter_by(
+        id=version_id, playbook_id=pb_id
+    ).first_or_404()
     return jsonify(version.to_dict())
 
 
-@bp.route("/api/playbooks/<int:pb_id>/versions/<int:version_id>/restore", methods=["POST"])
+@bp.route(
+    "/api/playbooks/<int:pb_id>/versions/<int:version_id>/restore", methods=["POST"]
+)
 @admin_required
 def api_playbook_version_restore(pb_id, version_id):
     pb = Playbook.query.get_or_404(pb_id)
-    version = PlaybookVersion.query.filter_by(id=version_id, playbook_id=pb_id).first_or_404()
+    version = PlaybookVersion.query.filter_by(
+        id=version_id, playbook_id=pb_id
+    ).first_or_404()
 
     # Create a new version with the restored content
-    last_version = PlaybookVersion.query.filter_by(playbook_id=pb_id).order_by(
-        PlaybookVersion.version_num.desc()
-    ).first()
+    last_version = (
+        PlaybookVersion.query.filter_by(playbook_id=pb_id)
+        .order_by(PlaybookVersion.version_num.desc())
+        .first()
+    )
     next_num = (last_version.version_num + 1) if last_version else 1
 
     new_version = PlaybookVersion(
@@ -654,7 +777,13 @@ def api_playbook_version_restore(pb_id, version_id):
     pb.content = version.content
     pb.updated_at = datetime.utcnow()
     db.session.commit()
-    audit("playbook_restore", "playbook", pb.id, pb.name, {"restored_version": version.version_num})
+    audit(
+        "playbook_restore",
+        "playbook",
+        pb.id,
+        pb.name,
+        {"restored_version": version.version_num},
+    )
     return jsonify({"ok": True, "version_num": next_num})
 
 
@@ -678,9 +807,13 @@ def api_playbooks_export_all():
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for pb in playbooks:
-            safe_name = "".join(c if c.isalnum() or c in "-_." else "_" for c in pb.name)
+            safe_name = "".join(
+                c if c.isalnum() or c in "-_." else "_" for c in pb.name
+            )
             if pb.folder:
-                safe_folder = "".join(c if c.isalnum() or c in "-_." else "_" for c in pb.folder.name)
+                safe_folder = "".join(
+                    c if c.isalnum() or c in "-_." else "_" for c in pb.folder.name
+                )
                 path = f"{safe_folder}/{safe_name}.yml"
             else:
                 path = f"{safe_name}.yml"
@@ -716,6 +849,7 @@ def api_playbooks_import():
             if folder_id is not None:
                 existing.folder_id = folder_id
             from datetime import datetime
+
             existing.updated_at = datetime.utcnow()
             updated += 1
         else:
@@ -738,7 +872,9 @@ def api_playbooks_import():
         try:
             with zipfile.ZipFile(io.BytesIO(data)) as zf:
                 for entry in zf.namelist():
-                    if entry.endswith("/") or not entry.lower().endswith((".yml", ".yaml")):
+                    if entry.endswith("/") or not entry.lower().endswith(
+                        (".yml", ".yaml")
+                    ):
                         continue
                     parts = entry.replace("\\", "/").split("/")
                     raw_name = parts[-1]
@@ -760,11 +896,18 @@ def api_playbooks_import():
         return jsonify({"error": "Unsupported file type. Use .yml, .yaml or .zip"}), 400
 
     db.session.commit()
-    audit("playbooks_import", "playbook", None, "", {"imported": imported, "updated": updated})
+    audit(
+        "playbooks_import",
+        "playbook",
+        None,
+        "",
+        {"imported": imported, "updated": updated},
+    )
     return jsonify({"ok": True, "imported": imported, "updated": updated})
 
 
 # ──────────────────── EXECUTIONS ────────────────────
+
 
 @bp.route("/api/executions", methods=["GET"])
 @login_required
@@ -792,11 +935,16 @@ def api_executions_create():
     ).count()
 
     if running_count >= max_concurrent:
-        return jsonify({
-            "error": f"Concurrency limit reached ({running_count}/{max_concurrent} executions running)",
-            "running_count": running_count,
-            "max_concurrent": max_concurrent,
-        }), 429
+        return (
+            jsonify(
+                {
+                    "error": f"Concurrency limit reached ({running_count}/{max_concurrent} executions running)",
+                    "running_count": running_count,
+                    "max_concurrent": max_concurrent,
+                }
+            ),
+            429,
+        )
 
     data = request.get_json() or {}
     pb_id = data.get("playbook_id")
@@ -831,7 +979,13 @@ def api_executions_create():
 
     thread = threading.Thread(target=run_playbook, args=(execution_id,), daemon=True)
     thread.start()
-    audit("execution_start", "execution", execution_id, pb.name, {"check_mode": execution.check_mode, "verbosity": verbosity})
+    audit(
+        "execution_start",
+        "execution",
+        execution_id,
+        pb.name,
+        {"check_mode": execution.check_mode, "verbosity": verbosity},
+    )
     return jsonify({"ok": True, "id": execution_id}), 201
 
 
@@ -860,10 +1014,12 @@ def api_executions_purge():
 
 # ──────────────────── SCHEDULES ────────────────────
 
+
 @bp.route("/api/schedules", methods=["GET"])
 @login_required
 def api_schedules():
     from app.scheduler import get_next_run
+
     schedules = Schedule.query.order_by(Schedule.name).all()
     result = []
     for s in schedules:
@@ -877,6 +1033,7 @@ def api_schedules():
 @admin_required
 def api_schedules_create():
     from app.scheduler import register_schedule
+
     data = request.get_json() or {}
     pb_id = data.get("playbook_id")
     if not Playbook.query.get(pb_id):
@@ -900,6 +1057,7 @@ def api_schedules_create():
 @admin_required
 def api_schedules_update(sched_id):
     from app.scheduler import register_schedule
+
     schedule = Schedule.query.get_or_404(sched_id)
     data = request.get_json() or {}
     schedule.name = data.get("name", schedule.name)
@@ -917,6 +1075,7 @@ def api_schedules_update(sched_id):
 @admin_required
 def api_schedules_delete(sched_id):
     from app.scheduler import unregister_schedule
+
     schedule = Schedule.query.get_or_404(sched_id)
     name = schedule.name
     unregister_schedule(sched_id)
@@ -927,6 +1086,7 @@ def api_schedules_delete(sched_id):
 
 
 # ──────────────────── SETTINGS ────────────────────
+
 
 @bp.route("/api/settings", methods=["GET"])
 @login_required
@@ -965,6 +1125,7 @@ def api_settings_schema():
 
 # ──────────────────── AUDIT ────────────────────
 
+
 @bp.route("/api/audit", methods=["GET"])
 @login_required
 def api_audit():
@@ -982,30 +1143,37 @@ def api_audit():
     total = query.count()
     logs = query.offset((page - 1) * per_page).limit(per_page).all()
 
-    return jsonify({
-        "logs": [l.to_dict() for l in logs],
-        "total": total,
-        "page": page,
-        "per_page": per_page,
-    })
+    return jsonify(
+        {
+            "logs": [l.to_dict() for l in logs],
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+        }
+    )
 
 
 # ──────────────────── USERS ────────────────────
+
 
 @bp.route("/api/users", methods=["GET"])
 @login_required
 def api_users():
     users = LocalUser.query.order_by(LocalUser.id).all()
-    return jsonify([
-        {
-            "id": u.id,
-            "username": u.username,
-            "role": u.role or "admin",
-            "is_ldap": u.password_hash.startswith("ldap:") if u.password_hash else False,
-            "created_at": u.created_at.isoformat() if u.created_at else None,
-        }
-        for u in users
-    ])
+    return jsonify(
+        [
+            {
+                "id": u.id,
+                "username": u.username,
+                "role": u.role or "admin",
+                "is_ldap": (
+                    u.password_hash.startswith("ldap:") if u.password_hash else False
+                ),
+                "created_at": u.created_at.isoformat() if u.created_at else None,
+            }
+            for u in users
+        ]
+    )
 
 
 @bp.route("/api/users", methods=["POST"])
@@ -1028,8 +1196,17 @@ def api_users_create():
     db.session.add(user)
     db.session.commit()
     audit("user_create", "user", user.id, username, {"role": role})
-    return jsonify({"id": user.id, "username": user.username, "role": user.role,
-                    "created_at": user.created_at.isoformat() if user.created_at else None}), 201
+    return (
+        jsonify(
+            {
+                "id": user.id,
+                "username": user.username,
+                "role": user.role,
+                "created_at": user.created_at.isoformat() if user.created_at else None,
+            }
+        ),
+        201,
+    )
 
 
 @bp.route("/api/users/<int:user_id>", methods=["PUT"])
@@ -1089,7 +1266,9 @@ def api_settings_test_ldap():
         from ldap3 import Server, Connection, ALL, SIMPLE, SUBTREE
         from ldap3.core.exceptions import LDAPException, LDAPBindError
     except ImportError:
-        return jsonify({"ok": False, "steps": [{"msg": "ldap3 not installed", "ok": False}]})
+        return jsonify(
+            {"ok": False, "steps": [{"msg": "ldap3 not installed", "ok": False}]}
+        )
 
     data = request.get_json() or {}
 
@@ -1103,14 +1282,16 @@ def api_settings_test_ldap():
 
     # Use posted values OR fall back to saved settings
     server_addr = get_val("ldap_server")
-    port        = int(get_val("ldap_port", "389") or 389)
-    base_dn     = get_val("ldap_base_dn")
-    bind_dn     = get_val("ldap_bind_dn")
-    bind_pass   = get_val("ldap_bind_password")
+    port = int(get_val("ldap_port", "389") or 389)
+    base_dn = get_val("ldap_base_dn")
+    bind_dn = get_val("ldap_bind_dn")
+    bind_pass = get_val("ldap_bind_password")
     user_filter = get_val("ldap_user_filter", "(sAMAccountName={username})")
-    use_ssl     = (data.get("ldap_use_ssl") or Setting.get("ldap_use_ssl", "false")).lower() == "true"
-    test_user   = data.get("test_username", "").strip()
-    test_pass   = data.get("test_password", "")
+    use_ssl = (
+        data.get("ldap_use_ssl") or Setting.get("ldap_use_ssl", "false")
+    ).lower() == "true"
+    test_user = data.get("test_username", "").strip()
+    test_pass = data.get("test_password", "")
 
     # Debug: show what config is being used
     step(f"Config: server={server_addr}, port={port}, ssl={use_ssl}")
@@ -1129,8 +1310,9 @@ def api_settings_test_ldap():
     step(f"Connecting to {server_addr}:{port}...")
 
     try:
-        server = Server(server_addr, port=port, use_ssl=use_ssl, get_info=ALL,
-                        connect_timeout=10)
+        server = Server(
+            server_addr, port=port, use_ssl=use_ssl, get_info=ALL, connect_timeout=10
+        )
         step("Server object created")
     except Exception as e:
         step(f"Failed to create server: {e}", ok=False)
@@ -1140,9 +1322,14 @@ def api_settings_test_ldap():
     try:
         if bind_dn and bind_pass:
             step(f"Attempting service account bind...")
-            conn = Connection(server, user=bind_dn, password=bind_pass,
-                              authentication=SIMPLE, auto_bind=True,
-                              receive_timeout=10)
+            conn = Connection(
+                server,
+                user=bind_dn,
+                password=bind_pass,
+                authentication=SIMPLE,
+                auto_bind=True,
+                receive_timeout=10,
+            )
             step(f"Service account bind OK")
         elif bind_dn and not bind_pass:
             step("Cannot bind: bind_dn is set but password is empty", ok=False)
@@ -1166,8 +1353,12 @@ def api_settings_test_ldap():
         filt = user_filter.replace("{username}", test_user)
         step(f"Searching: base='{base_dn}' filter='{filt}'")
         try:
-            conn.search(base_dn, filt, search_scope=SUBTREE,
-                        attributes=["distinguishedName", "cn", "sAMAccountName"])
+            conn.search(
+                base_dn,
+                filt,
+                search_scope=SUBTREE,
+                attributes=["distinguishedName", "cn", "sAMAccountName"],
+            )
             if conn.entries:
                 user_dn = conn.entries[0].entry_dn
                 step(f"User found: {user_dn}")
@@ -1177,9 +1368,14 @@ def api_settings_test_ldap():
                     conn.unbind()
                     step(f"Testing user password (len={len(test_pass)})...")
                     try:
-                        user_conn = Connection(server, user=user_dn, password=test_pass,
-                                               authentication=SIMPLE, auto_bind=True,
-                                               receive_timeout=10)
+                        user_conn = Connection(
+                            server,
+                            user=user_dn,
+                            password=test_pass,
+                            authentication=SIMPLE,
+                            auto_bind=True,
+                            receive_timeout=10,
+                        )
                         if user_conn.bound:
                             step("Password verification OK — auth would succeed")
                             user_conn.unbind()
@@ -1205,6 +1401,7 @@ def api_settings_test_ldap():
 
 
 # ──────────────────── HEALTH CHECK ────────────────────
+
 
 @bp.route("/health", methods=["GET"])
 def api_health():
@@ -1242,17 +1439,30 @@ def api_health():
         else:
             health["scheduler"] = "stopped"
             health["status"] = "degraded"
-            health["checks"].append({"name": "scheduler", "status": "warn", "error": "Scheduler not running"})
+            health["checks"].append(
+                {
+                    "name": "scheduler",
+                    "status": "warn",
+                    "error": "Scheduler not running",
+                }
+            )
     except Exception as e:
         health["scheduler"] = "error"
         health["status"] = "degraded"
-        health["checks"].append({"name": "scheduler", "status": "fail", "error": str(e)})
+        health["checks"].append(
+            {"name": "scheduler", "status": "fail", "error": str(e)}
+        )
 
-    status_code = 200 if health["status"] == "healthy" else 503 if health["status"] == "unhealthy" else 200
+    status_code = (
+        200
+        if health["status"] == "healthy"
+        else 503 if health["status"] == "unhealthy" else 200
+    )
     return jsonify(health), status_code
 
 
 # ──────────────────── GROUP VARIABLES ────────────────────
+
 
 @bp.route("/api/group-vars", methods=["GET"])
 @login_required
@@ -1281,9 +1491,18 @@ def api_group_vars_create():
         return jsonify({"error": "Variable name is required"}), 400
 
     # Check if already exists
-    existing = GroupVar.query.filter_by(group_name=group_name, var_name=var_name).first()
+    existing = GroupVar.query.filter_by(
+        group_name=group_name, var_name=var_name
+    ).first()
     if existing:
-        return jsonify({"error": f"Variable '{var_name}' already exists for group '{group_name}'"}), 409
+        return (
+            jsonify(
+                {
+                    "error": f"Variable '{var_name}' already exists for group '{group_name}'"
+                }
+            ),
+            409,
+        )
 
     gv = GroupVar(group_name=group_name, var_name=var_name, var_value=var_value)
     db.session.add(gv)
@@ -1314,9 +1533,18 @@ def api_group_vars_update(var_id):
 
     # Check uniqueness if changing group or var name
     if new_group != gv.group_name or new_var_name != gv.var_name:
-        existing = GroupVar.query.filter_by(group_name=new_group, var_name=new_var_name).first()
+        existing = GroupVar.query.filter_by(
+            group_name=new_group, var_name=new_var_name
+        ).first()
         if existing and existing.id != var_id:
-            return jsonify({"error": f"Variable '{new_var_name}' already exists for group '{new_group}'"}), 409
+            return (
+                jsonify(
+                    {
+                        "error": f"Variable '{new_var_name}' already exists for group '{new_group}'"
+                    }
+                ),
+                409,
+            )
 
     gv.group_name = new_group
     gv.var_name = new_var_name
@@ -1342,11 +1570,17 @@ def api_group_vars_delete(var_id):
 @login_required
 def api_group_vars_groups():
     """Get list of all unique group names that have variables defined."""
-    groups = db.session.query(GroupVar.group_name).distinct().order_by(GroupVar.group_name).all()
+    groups = (
+        db.session.query(GroupVar.group_name)
+        .distinct()
+        .order_by(GroupVar.group_name)
+        .all()
+    )
     return jsonify([g[0] for g in groups])
 
 
 # ──────────────────── HOST VARIABLES ────────────────────
+
 
 @bp.route("/api/host-vars", methods=["GET"])
 @login_required
@@ -1377,7 +1611,14 @@ def api_host_vars_create():
     # Check if already exists
     existing = HostVar.query.filter_by(host_name=host_name, var_name=var_name).first()
     if existing:
-        return jsonify({"error": f"Variable '{var_name}' already exists for host '{host_name}'"}), 409
+        return (
+            jsonify(
+                {
+                    "error": f"Variable '{var_name}' already exists for host '{host_name}'"
+                }
+            ),
+            409,
+        )
 
     hv = HostVar(host_name=host_name, var_name=var_name, var_value=var_value)
     db.session.add(hv)
@@ -1407,9 +1648,18 @@ def api_host_vars_update(var_id):
 
     # Check uniqueness if changing host or var name
     if new_host != hv.host_name or new_var_name != hv.var_name:
-        existing = HostVar.query.filter_by(host_name=new_host, var_name=new_var_name).first()
+        existing = HostVar.query.filter_by(
+            host_name=new_host, var_name=new_var_name
+        ).first()
         if existing and existing.id != var_id:
-            return jsonify({"error": f"Variable '{new_var_name}' already exists for host '{new_host}'"}), 409
+            return (
+                jsonify(
+                    {
+                        "error": f"Variable '{new_var_name}' already exists for host '{new_host}'"
+                    }
+                ),
+                409,
+            )
 
     hv.host_name = new_host
     hv.var_name = new_var_name
@@ -1435,11 +1685,14 @@ def api_host_vars_delete(var_id):
 @login_required
 def api_host_vars_hosts():
     """Get list of all unique host names that have variables defined."""
-    hosts = db.session.query(HostVar.host_name).distinct().order_by(HostVar.host_name).all()
+    hosts = (
+        db.session.query(HostVar.host_name).distinct().order_by(HostVar.host_name).all()
+    )
     return jsonify([h[0] for h in hosts])
 
 
 # ──────────────────── ANSIBLE ROLES ────────────────────
+
 
 @bp.route("/api/roles", methods=["GET"])
 @login_required
@@ -1492,7 +1745,9 @@ def api_roles_install():
             source=source,
             namespace=namespace,
             version=version or "latest",
-            path=os.path.join(roles_path, role_name if source == "git" else simple_name),
+            path=os.path.join(
+                roles_path, role_name if source == "git" else simple_name
+            ),
         )
         db.session.add(role)
         db.session.commit()
@@ -1510,6 +1765,7 @@ def api_roles_install():
 def api_roles_delete(role_id):
     """Uninstall/remove a role."""
     import shutil
+
     role = Role.query.get_or_404(role_id)
     name = f"{role.namespace}.{role.name}" if role.namespace else role.name
 
@@ -1544,18 +1800,24 @@ def api_roles_search():
         )
         if resp.status_code == 200:
             results = resp.json().get("results", [])
-            return jsonify([{
-                "name": r.get("name", ""),
-                "namespace": r.get("namespace", ""),
-                "description": r.get("description", ""),
-                "download_count": r.get("download_count", 0),
-            } for r in results])
+            return jsonify(
+                [
+                    {
+                        "name": r.get("name", ""),
+                        "namespace": r.get("namespace", ""),
+                        "description": r.get("description", ""),
+                        "download_count": r.get("download_count", 0),
+                    }
+                    for r in results
+                ]
+            )
         return jsonify([])
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 # ──────────────────── DYNAMIC INVENTORY ────────────────────
+
 
 @bp.route("/api/dynamic-inventories", methods=["GET"])
 @login_required
@@ -1575,7 +1837,10 @@ def api_dynamic_inventories_create():
         return jsonify({"error": "Name is required"}), 400
 
     if DynamicInventory.query.filter_by(name=name).first():
-        return jsonify({"error": "Dynamic inventory with this name already exists"}), 409
+        return (
+            jsonify({"error": "Dynamic inventory with this name already exists"}),
+            409,
+        )
 
     inv = DynamicInventory(
         name=name,
@@ -1645,13 +1910,18 @@ def api_dynamic_inventories_test(inv_id):
             try:
                 result = subprocess.run(
                     [script_path, "--list"],
-                    capture_output=True, text=True, timeout=30, cwd=tmpdir
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    cwd=tmpdir,
                 )
-                return jsonify({
-                    "ok": result.returncode == 0,
-                    "output": result.stdout,
-                    "error": result.stderr,
-                })
+                return jsonify(
+                    {
+                        "ok": result.returncode == 0,
+                        "output": result.stdout,
+                        "error": result.stderr,
+                    }
+                )
             except subprocess.TimeoutExpired:
                 return jsonify({"ok": False, "error": "Script timed out"})
             except Exception as e:
@@ -1664,13 +1934,18 @@ def api_dynamic_inventories_test(inv_id):
             try:
                 result = subprocess.run(
                     ["ansible-inventory", "-i", config_path, "--list"],
-                    capture_output=True, text=True, timeout=30, cwd=tmpdir
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    cwd=tmpdir,
                 )
-                return jsonify({
-                    "ok": result.returncode == 0,
-                    "output": result.stdout,
-                    "error": result.stderr,
-                })
+                return jsonify(
+                    {
+                        "ok": result.returncode == 0,
+                        "output": result.stdout,
+                        "error": result.stderr,
+                    }
+                )
             except subprocess.TimeoutExpired:
                 return jsonify({"ok": False, "error": "Inventory parsing timed out"})
             except Exception as e:
@@ -1747,75 +2022,89 @@ elif len(sys.argv) > 1 and sys.argv[1] == "--host":
 
 # ──────────────────── ANSIBLE MODULES (for autocompletion) ────────────────────
 
+
 @bp.route("/api/search", methods=["GET"])
 @login_required
 def api_search():
     """Global search across hosts, playbooks, executions, and schedules."""
     q = request.args.get("q", "").strip().lower()
     if not q:
-        return jsonify({"hosts": [], "playbooks": [], "executions": [], "schedules": []})
+        return jsonify(
+            {"hosts": [], "playbooks": [], "executions": [], "schedules": []}
+        )
 
     limit = 5
     like = f"%{q}%"
 
     # Search hosts (name, address)
-    hosts_results = Host.query.filter(
-        Host.name.ilike(like) | Host.address.ilike(like)
-    ).limit(limit).all()
+    hosts_results = (
+        Host.query.filter(Host.name.ilike(like) | Host.address.ilike(like))
+        .limit(limit)
+        .all()
+    )
 
     # Search playbooks (name, description)
-    playbooks_results = Playbook.query.filter(
-        Playbook.name.ilike(like) | Playbook.description.ilike(like)
-    ).limit(limit).all()
+    playbooks_results = (
+        Playbook.query.filter(
+            Playbook.name.ilike(like) | Playbook.description.ilike(like)
+        )
+        .limit(limit)
+        .all()
+    )
 
     # Search executions (playbook_name)
-    executions_results = Execution.query.filter(
-        Execution.playbook_name.ilike(like)
-    ).order_by(Execution.started_at.desc()).limit(limit).all()
+    executions_results = (
+        Execution.query.filter(Execution.playbook_name.ilike(like))
+        .order_by(Execution.started_at.desc())
+        .limit(limit)
+        .all()
+    )
 
     # Search schedules (name)
-    schedules_results = Schedule.query.filter(
-        Schedule.name.ilike(like)
-    ).limit(limit).all()
+    schedules_results = (
+        Schedule.query.filter(Schedule.name.ilike(like)).limit(limit).all()
+    )
 
-    return jsonify({
-        "hosts": [
-            {
-                "id": h.id,
-                "name": h.name,
-                "type": "host",
-                "subtitle": h.address,
-            }
-            for h in hosts_results
-        ],
-        "playbooks": [
-            {
-                "id": p.id,
-                "name": p.name,
-                "type": "playbook",
-                "subtitle": p.description or "No description",
-            }
-            for p in playbooks_results
-        ],
-        "executions": [
-            {
-                "id": e.id,
-                "name": f"#{e.id} - {e.playbook_name}",
-                "type": "execution",
-                "subtitle": f"{e.status} - {e.started_at.strftime('%Y-%m-%d %H:%M') if e.started_at else 'Pending'}",
-            }
-            for e in executions_results
-        ],
-        "schedules": [
-            {
-                "id": s.id,
-                "name": s.name,
-                "type": "schedule",
-                "subtitle": s.cron_expr,
-            }
-            for s in schedules_results
-        ],
-    })
+    return jsonify(
+        {
+            "hosts": [
+                {
+                    "id": h.id,
+                    "name": h.name,
+                    "type": "host",
+                    "subtitle": h.address,
+                }
+                for h in hosts_results
+            ],
+            "playbooks": [
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "type": "playbook",
+                    "subtitle": p.description or "No description",
+                }
+                for p in playbooks_results
+            ],
+            "executions": [
+                {
+                    "id": e.id,
+                    "name": f"#{e.id} - {e.playbook_name}",
+                    "type": "execution",
+                    "subtitle": f"{e.status} - {e.started_at.strftime('%Y-%m-%d %H:%M') if e.started_at else 'Pending'}",
+                }
+                for e in executions_results
+            ],
+            "schedules": [
+                {
+                    "id": s.id,
+                    "name": s.name,
+                    "type": "schedule",
+                    "subtitle": s.cron_expr,
+                }
+                for s in schedules_results
+            ],
+        }
+    )
 
 
 @bp.route("/api/ansible/modules", methods=["GET"])
@@ -1878,30 +2167,35 @@ def api_ansible_modules():
 
 # ──────────────────── WEBSOCKET EVENT HANDLERS ────────────────────
 
-@socketio.on('join_execution')
+
+@socketio.on("join_execution")
 def handle_join_execution(data):
     """Client joins a room to receive real-time updates for a specific execution."""
-    execution_id = data.get('execution_id')
+    execution_id = data.get("execution_id")
     if execution_id:
-        room = f'execution_{execution_id}'
+        room = f"execution_{execution_id}"
         join_room(room)
         # Send current state to the newly joined client
         try:
             execution = Execution.query.get(execution_id)
             if execution:
-                socketio.emit('execution_status', {
-                    'execution_id': execution_id,
-                    'status': execution.status,
-                    'output': execution.output or ''
-                }, room=room)
+                socketio.emit(
+                    "execution_status",
+                    {
+                        "execution_id": execution_id,
+                        "status": execution.status,
+                        "output": execution.output or "",
+                    },
+                    room=room,
+                )
         except Exception:
             pass
 
 
-@socketio.on('leave_execution')
+@socketio.on("leave_execution")
 def handle_leave_execution(data):
     """Client leaves an execution room."""
-    execution_id = data.get('execution_id')
+    execution_id = data.get("execution_id")
     if execution_id:
-        room = f'execution_{execution_id}'
+        room = f"execution_{execution_id}"
         leave_room(room)

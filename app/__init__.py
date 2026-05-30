@@ -79,19 +79,30 @@ def _migrate(db_path):
     exec_cols = _get_columns(cur, "execution")
     exec_migrations = []
     if "playbook_name" not in exec_cols:
-        exec_migrations.append("ALTER TABLE execution ADD COLUMN playbook_name VARCHAR(255)")
+        exec_migrations.append(
+            "ALTER TABLE execution ADD COLUMN playbook_name VARCHAR(255)"
+        )
     if "host_pattern" not in exec_cols:
-        exec_migrations.append("ALTER TABLE execution ADD COLUMN host_pattern VARCHAR(500) DEFAULT 'all'")
+        exec_migrations.append(
+            "ALTER TABLE execution ADD COLUMN host_pattern VARCHAR(500) DEFAULT 'all'"
+        )
     if "triggered_by" not in exec_cols:
-        exec_migrations.append("ALTER TABLE execution ADD COLUMN triggered_by VARCHAR(100) DEFAULT 'manual'")
+        exec_migrations.append(
+            "ALTER TABLE execution ADD COLUMN triggered_by VARCHAR(100) DEFAULT 'manual'"
+        )
     if "playbook_id" not in exec_cols:
-        exec_migrations.append("ALTER TABLE execution ADD COLUMN playbook_id INTEGER REFERENCES playbook(id)")
+        exec_migrations.append(
+            "ALTER TABLE execution ADD COLUMN playbook_id INTEGER REFERENCES playbook(id)"
+        )
 
     for col, ddl in [
         ("extra_vars", "ALTER TABLE execution ADD COLUMN extra_vars TEXT DEFAULT ''"),
         ("check_mode", "ALTER TABLE execution ADD COLUMN check_mode BOOLEAN DEFAULT 0"),
         ("tags", "ALTER TABLE execution ADD COLUMN tags VARCHAR(500) DEFAULT ''"),
-        ("skip_tags", "ALTER TABLE execution ADD COLUMN skip_tags VARCHAR(500) DEFAULT ''"),
+        (
+            "skip_tags",
+            "ALTER TABLE execution ADD COLUMN skip_tags VARCHAR(500) DEFAULT ''",
+        ),
     ]:
         if col not in exec_cols:
             exec_migrations.append(ddl)
@@ -121,31 +132,43 @@ def _migrate(db_path):
         if "last_run_at" not in sched_cols:
             migrations.append("ALTER TABLE schedule ADD COLUMN last_run_at DATETIME")
         if "last_run_status" not in sched_cols:
-            migrations.append("ALTER TABLE schedule ADD COLUMN last_run_status VARCHAR(50)")
+            migrations.append(
+                "ALTER TABLE schedule ADD COLUMN last_run_status VARCHAR(50)"
+            )
     except Exception:
         pass
 
     if "folder_id" not in playbook_cols:
-        migrations.append("ALTER TABLE playbook ADD COLUMN folder_id INTEGER REFERENCES folder(id)")
+        migrations.append(
+            "ALTER TABLE playbook ADD COLUMN folder_id INTEGER REFERENCES folder(id)"
+        )
 
     # LocalUser role and theme_preference columns
     try:
         user_cols = _get_columns(cur, "local_user")
         if "role" not in user_cols:
-            migrations.append("ALTER TABLE local_user ADD COLUMN role VARCHAR(20) DEFAULT 'admin'")
+            migrations.append(
+                "ALTER TABLE local_user ADD COLUMN role VARCHAR(20) DEFAULT 'admin'"
+            )
         if "theme_preference" not in user_cols:
-            migrations.append("ALTER TABLE local_user ADD COLUMN theme_preference VARCHAR(20) DEFAULT 'system'")
+            migrations.append(
+                "ALTER TABLE local_user ADD COLUMN theme_preference VARCHAR(20) DEFAULT 'system'"
+            )
     except Exception:
         pass
 
     # Playbook is_favorite column
     if "is_favorite" not in playbook_cols:
-        migrations.append("ALTER TABLE playbook ADD COLUMN is_favorite BOOLEAN DEFAULT 0")
+        migrations.append(
+            "ALTER TABLE playbook ADD COLUMN is_favorite BOOLEAN DEFAULT 0"
+        )
 
     # Execution verbosity column
     exec_cols = _get_columns(cur, "execution")
     if "verbosity" not in exec_cols:
-        migrations.append("ALTER TABLE execution ADD COLUMN verbosity INTEGER DEFAULT 0")
+        migrations.append(
+            "ALTER TABLE execution ADD COLUMN verbosity INTEGER DEFAULT 0"
+        )
 
     for sql in migrations:
         try:
@@ -171,14 +194,15 @@ def create_app():
     # async_mode='gevent' for production, 'threading' for development fallback
     socketio.init_app(
         app,
-        async_mode='gevent',
+        async_mode="gevent",
         cors_allowed_origins="*",
         logger=False,
-        engineio_logger=False
+        engineio_logger=False,
     )
 
     with app.app_context():
         from app import models  # noqa: F401
+
         db.create_all()
 
         # Run SQLite migrations only for SQLite databases
@@ -189,17 +213,17 @@ def create_app():
         models.Setting.init_defaults()
 
     from app.routes import bp
+
     app.register_blueprint(bp)
 
     # Mount Swagger UI at /api/docs
     try:
         from flask_swagger_ui import get_swaggerui_blueprint
+
         SWAGGER_URL = "/api/docs"
         API_URL = "/static/swagger.json"
         swaggerui_blueprint = get_swaggerui_blueprint(
-            SWAGGER_URL,
-            API_URL,
-            config={"app_name": "Ansible GUI API"}
+            SWAGGER_URL, API_URL, config={"app_name": "Ansible GUI API"}
         )
         app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
     except ImportError:
@@ -207,6 +231,7 @@ def create_app():
         pass
 
     from app.scheduler import setup_scheduler
+
     setup_scheduler(app)
 
     return app

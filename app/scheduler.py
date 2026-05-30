@@ -16,6 +16,7 @@ def setup_scheduler(app):
 
     with app.app_context():
         from app.models import Setting
+
         interval = int(Setting.get("ping_interval", "300") or 300)
 
     _scheduler.add_job(
@@ -28,11 +29,13 @@ def setup_scheduler(app):
     _scheduler.start()
 
     import atexit
+
     atexit.register(lambda: _scheduler.shutdown(wait=False))
 
 
 def _ping_job():
     from app.ping import ping_all_hosts
+
     with _app.app_context():
         ping_all_hosts()
 
@@ -60,7 +63,9 @@ def execute_scheduled_playbook(schedule_id):
         db.session.commit()
         execution_id = execution.id
 
-        thread = threading.Thread(target=run_playbook, args=(execution_id,), daemon=True)
+        thread = threading.Thread(
+            target=run_playbook, args=(execution_id,), daemon=True
+        )
         thread.start()
         thread.join()
 

@@ -82,6 +82,10 @@ async function api(method, url, body) {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 
+let chartTrend = null;
+let chartRatio = null;
+let chartPlaybooks = null;
+
 async function loadDashboard() {
   const res = await api('GET', '/api/dashboard');
   const data = await res.json();
@@ -102,6 +106,208 @@ async function loadDashboard() {
     `;
     tbody.appendChild(tr);
   }
+
+  // Load stats for charts
+  loadStats();
+}
+
+async function loadStats() {
+  const res = await api('GET', '/api/stats');
+  if (!res.ok) return;
+  const stats = await res.json();
+
+  renderTrendChart(stats.executions_per_day);
+  renderRatioChart(stats.success_count, stats.failed_count, stats.other_count);
+  renderTopPlaybooksChart(stats.top_playbooks);
+}
+
+function getChartColors() {
+  const isDark = document.documentElement.classList.contains('dark-theme');
+  return {
+    text: isDark ? '#a0aec0' : '#4a5568',
+    grid: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+    success: '#27d96c',
+    danger: '#f5365c',
+    info: '#11cdef',
+    primary: '#6c63ff',
+    warning: '#fb8c00',
+  };
+}
+
+function renderTrendChart(data) {
+  const ctx = document.getElementById('chart-executions-trend');
+  if (!ctx) return;
+
+  const colors = getChartColors();
+  const labels = data.map(d => d.date.slice(5)); // MM-DD format
+  const totals = data.map(d => d.total);
+  const successes = data.map(d => d.success);
+  const failures = data.map(d => d.failed);
+
+  if (chartTrend) chartTrend.destroy();
+
+  chartTrend = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Total',
+          data: totals,
+          borderColor: colors.primary,
+          backgroundColor: colors.primary + '33',
+          fill: true,
+          tension: 0.3,
+        },
+        {
+          label: 'Success',
+          data: successes,
+          borderColor: colors.success,
+          backgroundColor: 'transparent',
+          tension: 0.3,
+        },
+        {
+          label: 'Failed',
+          data: failures,
+          borderColor: colors.danger,
+          backgroundColor: 'transparent',
+          tension: 0.3,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'top',
+          labels: { color: colors.text, usePointStyle: true, pointStyle: 'circle' },
+        },
+      },
+      scales: {
+        x: {
+          ticks: { color: colors.text, maxRotation: 45, minRotation: 45 },
+          grid: { color: colors.grid },
+        },
+        y: {
+          beginAtZero: true,
+          ticks: { color: colors.text, stepSize: 1 },
+          grid: { color: colors.grid },
+        },
+      },
+    },
+  });
+}
+
+function renderRatioChart(success, failed, other) {
+  const ctx = document.getElementById('chart-success-ratio');
+  if (!ctx) return;
+
+  const colors = getChartColors();
+
+  if (chartRatio) chartRatio.destroy();
+
+  const total = success + failed + other;
+  if (total === 0) {
+    // No data - show placeholder
+    chartRatio = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: ['No data'],
+        datasets: [{ data: [1], backgroundColor: [colors.grid] }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+      },
+    });
+    return;
+  }
+
+  chartRatio = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Success', 'Failed', 'Other'],
+      datasets: [{
+        data: [success, failed, other],
+        backgroundColor: [colors.success, colors.danger, colors.warning],
+        borderWidth: 0,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '60%',
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { color: colors.text, usePointStyle: true, pointStyle: 'circle' },
+        },
+      },
+    },
+  });
+}
+
+function renderTopPlaybooksChart(data) {
+  const ctx = document.getElementById('chart-top-playbooks');
+  if (!ctx) return;
+
+  const colors = getChartColors();
+
+  if (chartPlaybooks) chartPlaybooks.destroy();
+
+  if (!data || data.length === 0) {
+    chartPlaybooks = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['No data'],
+        datasets: [{ data: [0], backgroundColor: [colors.grid] }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+      },
+    });
+    return;
+  }
+
+  const labels = data.map(d => d.name.length > 20 ? d.name.slice(0, 20) + '...' : d.name);
+  const counts = data.map(d => d.count);
+  const barColors = [colors.primary, colors.info, colors.success, colors.warning, colors.danger];
+
+  chartPlaybooks = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Executions',
+        data: counts,
+        backgroundColor: barColors.slice(0, data.length),
+        borderRadius: 4,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: {
+        legend: { display: false },
+      },
+      scales: {
+        x: {
+          beginAtZero: true,
+          ticks: { color: colors.text, stepSize: 1 },
+          grid: { color: colors.grid },
+        },
+        y: {
+          ticks: { color: colors.text },
+          grid: { display: false },
+        },
+      },
+    },
+  });
 }
 
 // ── Hosts ─────────────────────────────────────────────────────────────────────

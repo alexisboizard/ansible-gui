@@ -6,6 +6,23 @@ from flask_sqlalchemy import SQLAlchemy
 db = SQLAlchemy()
 
 
+def _get_database_uri():
+    """Get database URI from environment or default to SQLite."""
+    database_url = os.environ.get("DATABASE_URL", "")
+
+    if database_url:
+        # Fix for Heroku-style postgres:// URLs (SQLAlchemy requires postgresql://)
+        if database_url.startswith("postgres://"):
+            database_url = database_url.replace("postgres://", "postgresql://", 1)
+        return database_url
+
+    # Default to SQLite
+    instance_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "instance")
+    os.makedirs(instance_path, exist_ok=True)
+    db_path = os.path.join(instance_path, "ansible_gui.db")
+    return f"sqlite:///{db_path}"
+
+
 def _get_columns(cur, table):
     cur.execute(f"PRAGMA table_info({table})")
     return {row[1] for row in cur.fetchall()}
@@ -130,11 +147,8 @@ def _migrate(db_path):
 def create_app():
     app = Flask(__name__)
 
-    instance_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "instance")
-    os.makedirs(instance_path, exist_ok=True)
-
-    db_path = os.path.join(instance_path, "ansible_gui.db")
-    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
+    database_uri = _get_database_uri()
+    app.config["SQLALCHEMY_DATABASE_URI"] = database_uri
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", os.urandom(24).hex())
 
@@ -143,11 +157,31 @@ def create_app():
     with app.app_context():
         from app import models  # noqa: F401
         db.create_all()
-        _migrate(db_path)
+
+        # Run SQLite migrations only for SQLite databases
+        if database_uri.startswith("sqlite:///"):
+            db_path = database_uri.replace("sqlite:///", "")
+            _migrate(db_path)
+
         models.Setting.init_defaults()
 
     from app.routes import bp
     app.register_blueprint(bp)
+
+    # Mount Swagger UI at /api/docs
+    try:
+        from flask_swagger_ui import get_swaggerui_blueprint
+        SWAGGER_URL = "/api/docs"
+        API_URL = "/static/swagger.json"
+        swaggerui_blueprint = get_swaggerui_blueprint(
+            SWAGGER_URL,
+            API_URL,
+            config={"app_name": "Ansible GUI API"}
+        )
+        app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
+    except ImportError:
+        # flask-swagger-ui not installed, skip Swagger UI
+        pass
 
     from app.scheduler import setup_scheduler
     setup_scheduler(app)

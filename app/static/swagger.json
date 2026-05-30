@@ -1,0 +1,1568 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Ansible GUI API",
+    "description": "REST API for managing Ansible playbooks, hosts, executions, and schedules.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Ansible GUI"
+    }
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Current server"
+    }
+  ],
+  "tags": [
+    {"name": "Authentication", "description": "Login and session management"},
+    {"name": "Dashboard", "description": "Dashboard statistics"},
+    {"name": "Hosts", "description": "Host inventory management"},
+    {"name": "Folders", "description": "Playbook folder organization"},
+    {"name": "Playbooks", "description": "Playbook management"},
+    {"name": "Executions", "description": "Playbook execution management"},
+    {"name": "Schedules", "description": "Scheduled execution management"},
+    {"name": "Settings", "description": "Application settings"},
+    {"name": "Users", "description": "User management"},
+    {"name": "Audit", "description": "Audit log"}
+  ],
+  "paths": {
+    "/api/login": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Login",
+        "description": "Authenticate with username and password",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["username", "password"],
+                "properties": {
+                  "username": {"type": "string", "example": "admin"},
+                  "password": {"type": "string", "example": "admin"}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {"type": "boolean", "example": true}
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/Error"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/logout": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Logout",
+        "description": "End the current session",
+        "responses": {
+          "200": {
+            "description": "Logout successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {"type": "boolean", "example": true}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/me": {
+      "get": {
+        "tags": ["Authentication"],
+        "summary": "Get current user",
+        "description": "Get information about the currently logged-in user",
+        "security": [{"sessionAuth": []}],
+        "responses": {
+          "200": {
+            "description": "User information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "username": {"type": "string", "example": "admin"},
+                    "role": {"type": "string", "enum": ["admin", "readonly"], "example": "admin"}
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"}
+        }
+      }
+    },
+    "/api/dashboard": {
+      "get": {
+        "tags": ["Dashboard"],
+        "summary": "Get dashboard data",
+        "description": "Get summary statistics and recent executions",
+        "security": [{"sessionAuth": []}],
+        "responses": {
+          "200": {
+            "description": "Dashboard data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "total_hosts": {"type": "integer", "example": 10},
+                    "reachable_hosts": {"type": "integer", "example": 8},
+                    "total_playbooks": {"type": "integer", "example": 5},
+                    "total_executions": {"type": "integer", "example": 100},
+                    "recent_executions": {
+                      "type": "array",
+                      "items": {"$ref": "#/components/schemas/Execution"}
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"}
+        }
+      }
+    },
+    "/api/stats": {
+      "get": {
+        "tags": ["Dashboard"],
+        "summary": "Get statistics for graphs",
+        "description": "Get detailed statistics including executions per day and top playbooks",
+        "security": [{"sessionAuth": []}],
+        "responses": {
+          "200": {
+            "description": "Statistics data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "total_hosts": {"type": "integer"},
+                    "total_playbooks": {"type": "integer"},
+                    "total_executions": {"type": "integer"},
+                    "success_count": {"type": "integer"},
+                    "failed_count": {"type": "integer"},
+                    "other_count": {"type": "integer"},
+                    "executions_per_day": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "date": {"type": "string", "format": "date"},
+                          "total": {"type": "integer"},
+                          "success": {"type": "integer"},
+                          "failed": {"type": "integer"}
+                        }
+                      }
+                    },
+                    "top_playbooks": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {"type": "string"},
+                          "count": {"type": "integer"}
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"}
+        }
+      }
+    },
+    "/api/hosts": {
+      "get": {
+        "tags": ["Hosts"],
+        "summary": "List hosts",
+        "description": "Get all hosts, optionally filtered by search query",
+        "security": [{"sessionAuth": []}],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Search query (matches name, address, or groups)",
+            "schema": {"type": "string"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of hosts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {"$ref": "#/components/schemas/Host"}
+                }
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"}
+        }
+      },
+      "post": {
+        "tags": ["Hosts"],
+        "summary": "Create host",
+        "description": "Create a new host (admin only)",
+        "security": [{"sessionAuth": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/HostInput"}
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Host created",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/Host"}
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"},
+          "403": {"description": "Admin access required"}
+        }
+      }
+    },
+    "/api/hosts/{host_id}": {
+      "put": {
+        "tags": ["Hosts"],
+        "summary": "Update host",
+        "description": "Update an existing host (admin only)",
+        "security": [{"sessionAuth": []}],
+        "parameters": [
+          {
+            "name": "host_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "integer"}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/HostInput"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Host updated",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/Host"}
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"},
+          "403": {"description": "Admin access required"},
+          "404": {"description": "Host not found"}
+        }
+      },
+      "delete": {
+        "tags": ["Hosts"],
+        "summary": "Delete host",
+        "description": "Delete a host (admin only)",
+        "security": [{"sessionAuth": []}],
+        "parameters": [
+          {
+            "name": "host_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "integer"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Host deleted",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/Success"}
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"},
+          "403": {"description": "Admin access required"},
+          "404": {"description": "Host not found"}
+        }
+      }
+    },
+    "/api/hosts/ping": {
+      "post": {
+        "tags": ["Hosts"],
+        "summary": "Ping all hosts",
+        "description": "Start a background task to ping all hosts",
+        "security": [{"sessionAuth": []}],
+        "responses": {
+          "200": {
+            "description": "Ping started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {"type": "boolean"},
+                    "message": {"type": "string"}
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"}
+        }
+      }
+    },
+    "/api/hosts/export": {
+      "get": {
+        "tags": ["Hosts"],
+        "summary": "Export hosts as CSV",
+        "description": "Download all hosts as a CSV file",
+        "security": [{"sessionAuth": []}],
+        "responses": {
+          "200": {
+            "description": "CSV file",
+            "content": {
+              "text/csv": {
+                "schema": {"type": "string", "format": "binary"}
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"}
+        }
+      }
+    },
+    "/api/hosts/import": {
+      "post": {
+        "tags": ["Hosts"],
+        "summary": "Import hosts from CSV",
+        "description": "Import hosts from a CSV file (admin only)",
+        "security": [{"sessionAuth": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "CSV file with columns: name, address, groups, os_type, variables"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Import result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {"type": "boolean"},
+                    "imported": {"type": "integer"}
+                  }
+                }
+              }
+            }
+          },
+          "400": {"description": "Invalid file"},
+          "401": {"description": "Not authenticated"},
+          "403": {"description": "Admin access required"}
+        }
+      }
+    },
+    "/api/folders": {
+      "get": {
+        "tags": ["Folders"],
+        "summary": "List folders",
+        "description": "Get all playbook folders",
+        "security": [{"sessionAuth": []}],
+        "responses": {
+          "200": {
+            "description": "List of folders",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {"$ref": "#/components/schemas/Folder"}
+                }
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"}
+        }
+      },
+      "post": {
+        "tags": ["Folders"],
+        "summary": "Create folder",
+        "description": "Create a new folder (admin only)",
+        "security": [{"sessionAuth": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": {"type": "string", "example": "Infrastructure"}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Folder created",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/Folder"}
+              }
+            }
+          },
+          "400": {"description": "Name is required"},
+          "401": {"description": "Not authenticated"},
+          "403": {"description": "Admin access required"},
+          "409": {"description": "Folder already exists"}
+        }
+      }
+    },
+    "/api/folders/{folder_id}": {
+      "put": {
+        "tags": ["Folders"],
+        "summary": "Update folder",
+        "description": "Update a folder name (admin only)",
+        "security": [{"sessionAuth": []}],
+        "parameters": [
+          {
+            "name": "folder_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "integer"}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": {"type": "string"}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Folder updated",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/Folder"}
+              }
+            }
+          },
+          "400": {"description": "Name is required"},
+          "401": {"description": "Not authenticated"},
+          "403": {"description": "Admin access required"},
+          "404": {"description": "Folder not found"}
+        }
+      },
+      "delete": {
+        "tags": ["Folders"],
+        "summary": "Delete folder",
+        "description": "Delete a folder (playbooks become unfiled, admin only)",
+        "security": [{"sessionAuth": []}],
+        "parameters": [
+          {
+            "name": "folder_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "integer"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Folder deleted",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/Success"}
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"},
+          "403": {"description": "Admin access required"},
+          "404": {"description": "Folder not found"}
+        }
+      }
+    },
+    "/api/playbooks": {
+      "get": {
+        "tags": ["Playbooks"],
+        "summary": "List playbooks",
+        "description": "Get all playbooks",
+        "security": [{"sessionAuth": []}],
+        "responses": {
+          "200": {
+            "description": "List of playbooks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {"$ref": "#/components/schemas/Playbook"}
+                }
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"}
+        }
+      },
+      "post": {
+        "tags": ["Playbooks"],
+        "summary": "Create playbook",
+        "description": "Create a new playbook (admin only)",
+        "security": [{"sessionAuth": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/PlaybookInput"}
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Playbook created",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/Playbook"}
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"},
+          "403": {"description": "Admin access required"}
+        }
+      }
+    },
+    "/api/playbooks/{pb_id}": {
+      "put": {
+        "tags": ["Playbooks"],
+        "summary": "Update playbook",
+        "description": "Update a playbook (admin only)",
+        "security": [{"sessionAuth": []}],
+        "parameters": [
+          {
+            "name": "pb_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "integer"}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/PlaybookInput"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Playbook updated",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/Playbook"}
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"},
+          "403": {"description": "Admin access required"},
+          "404": {"description": "Playbook not found"}
+        }
+      },
+      "delete": {
+        "tags": ["Playbooks"],
+        "summary": "Delete playbook",
+        "description": "Delete a playbook (admin only)",
+        "security": [{"sessionAuth": []}],
+        "parameters": [
+          {
+            "name": "pb_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "integer"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Playbook deleted",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/Success"}
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"},
+          "403": {"description": "Admin access required"},
+          "404": {"description": "Playbook not found"}
+        }
+      }
+    },
+    "/api/playbooks/{pb_id}/versions": {
+      "get": {
+        "tags": ["Playbooks"],
+        "summary": "Get playbook versions",
+        "description": "Get version history of a playbook",
+        "security": [{"sessionAuth": []}],
+        "parameters": [
+          {
+            "name": "pb_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "integer"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Version history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "playbook": {
+                      "type": "object",
+                      "properties": {
+                        "id": {"type": "integer"},
+                        "name": {"type": "string"}
+                      }
+                    },
+                    "versions": {
+                      "type": "array",
+                      "items": {"$ref": "#/components/schemas/PlaybookVersion"}
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"},
+          "404": {"description": "Playbook not found"}
+        }
+      }
+    },
+    "/api/playbooks/{pb_id}/versions/{version_id}/restore": {
+      "post": {
+        "tags": ["Playbooks"],
+        "summary": "Restore playbook version",
+        "description": "Restore a playbook to a previous version (admin only)",
+        "security": [{"sessionAuth": []}],
+        "parameters": [
+          {
+            "name": "pb_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "integer"}
+          },
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "integer"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Version restored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {"type": "boolean"},
+                    "version_num": {"type": "integer"}
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"},
+          "403": {"description": "Admin access required"},
+          "404": {"description": "Playbook or version not found"}
+        }
+      }
+    },
+    "/api/playbooks/{pb_id}/export": {
+      "get": {
+        "tags": ["Playbooks"],
+        "summary": "Export single playbook",
+        "description": "Download a playbook as a YAML file",
+        "security": [{"sessionAuth": []}],
+        "parameters": [
+          {
+            "name": "pb_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "integer"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "YAML file",
+            "content": {
+              "text/yaml": {
+                "schema": {"type": "string"}
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"},
+          "404": {"description": "Playbook not found"}
+        }
+      }
+    },
+    "/api/playbooks/export": {
+      "get": {
+        "tags": ["Playbooks"],
+        "summary": "Export all playbooks",
+        "description": "Download all playbooks as a ZIP file",
+        "security": [{"sessionAuth": []}],
+        "responses": {
+          "200": {
+            "description": "ZIP file",
+            "content": {
+              "application/zip": {
+                "schema": {"type": "string", "format": "binary"}
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"}
+        }
+      }
+    },
+    "/api/playbooks/import": {
+      "post": {
+        "tags": ["Playbooks"],
+        "summary": "Import playbooks",
+        "description": "Import playbooks from YAML or ZIP file (admin only)",
+        "security": [{"sessionAuth": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": ".yml, .yaml, or .zip file"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Import result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {"type": "boolean"},
+                    "imported": {"type": "integer"},
+                    "updated": {"type": "integer"}
+                  }
+                }
+              }
+            }
+          },
+          "400": {"description": "Invalid file"},
+          "401": {"description": "Not authenticated"},
+          "403": {"description": "Admin access required"}
+        }
+      }
+    },
+    "/api/executions": {
+      "get": {
+        "tags": ["Executions"],
+        "summary": "List executions",
+        "description": "Get execution history (last 100)",
+        "security": [{"sessionAuth": []}],
+        "responses": {
+          "200": {
+            "description": "List of executions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {"$ref": "#/components/schemas/Execution"}
+                }
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"}
+        }
+      },
+      "post": {
+        "tags": ["Executions"],
+        "summary": "Start execution",
+        "description": "Execute a playbook (admin only)",
+        "security": [{"sessionAuth": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["playbook_id"],
+                "properties": {
+                  "playbook_id": {"type": "integer"},
+                  "extra_vars": {"type": "string", "description": "JSON or key=value extra variables"},
+                  "check_mode": {"type": "boolean", "default": false},
+                  "tags": {"type": "string", "description": "Comma-separated tags"},
+                  "skip_tags": {"type": "string", "description": "Comma-separated tags to skip"}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Execution started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {"type": "boolean"},
+                    "id": {"type": "integer"}
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"},
+          "403": {"description": "Admin access required"},
+          "404": {"description": "Playbook not found"}
+        }
+      }
+    },
+    "/api/executions/{exec_id}": {
+      "get": {
+        "tags": ["Executions"],
+        "summary": "Get execution details",
+        "description": "Get details and output of an execution",
+        "security": [{"sessionAuth": []}],
+        "parameters": [
+          {
+            "name": "exec_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "integer"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Execution details",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/Execution"}
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"},
+          "404": {"description": "Execution not found"}
+        }
+      }
+    },
+    "/api/executions/{exec_id}/cancel": {
+      "post": {
+        "tags": ["Executions"],
+        "summary": "Cancel execution",
+        "description": "Cancel a running execution (admin only)",
+        "security": [{"sessionAuth": []}],
+        "parameters": [
+          {
+            "name": "exec_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "integer"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Execution cancelled",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/Success"}
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"},
+          "403": {"description": "Admin access required"},
+          "404": {"description": "Execution not found"}
+        }
+      }
+    },
+    "/api/executions/purge": {
+      "post": {
+        "tags": ["Executions"],
+        "summary": "Purge all executions",
+        "description": "Delete all execution history (admin only)",
+        "security": [{"sessionAuth": []}],
+        "responses": {
+          "200": {
+            "description": "Executions purged",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/Success"}
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"},
+          "403": {"description": "Admin access required"}
+        }
+      }
+    },
+    "/api/schedules": {
+      "get": {
+        "tags": ["Schedules"],
+        "summary": "List schedules",
+        "description": "Get all schedules",
+        "security": [{"sessionAuth": []}],
+        "responses": {
+          "200": {
+            "description": "List of schedules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {"$ref": "#/components/schemas/Schedule"}
+                }
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"}
+        }
+      },
+      "post": {
+        "tags": ["Schedules"],
+        "summary": "Create schedule",
+        "description": "Create a new schedule (admin only)",
+        "security": [{"sessionAuth": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/ScheduleInput"}
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Schedule created",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/Schedule"}
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"},
+          "403": {"description": "Admin access required"},
+          "404": {"description": "Playbook not found"}
+        }
+      }
+    },
+    "/api/schedules/{sched_id}": {
+      "put": {
+        "tags": ["Schedules"],
+        "summary": "Update schedule",
+        "description": "Update a schedule (admin only)",
+        "security": [{"sessionAuth": []}],
+        "parameters": [
+          {
+            "name": "sched_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "integer"}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {"$ref": "#/components/schemas/ScheduleInput"}
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Schedule updated",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/Schedule"}
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"},
+          "403": {"description": "Admin access required"},
+          "404": {"description": "Schedule not found"}
+        }
+      },
+      "delete": {
+        "tags": ["Schedules"],
+        "summary": "Delete schedule",
+        "description": "Delete a schedule (admin only)",
+        "security": [{"sessionAuth": []}],
+        "parameters": [
+          {
+            "name": "sched_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "integer"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Schedule deleted",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/Success"}
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"},
+          "403": {"description": "Admin access required"},
+          "404": {"description": "Schedule not found"}
+        }
+      }
+    },
+    "/api/settings": {
+      "get": {
+        "tags": ["Settings"],
+        "summary": "Get settings",
+        "description": "Get all application settings (sensitive values masked)",
+        "security": [{"sessionAuth": []}],
+        "responses": {
+          "200": {
+            "description": "Settings object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {"type": "string"}
+                }
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"}
+        }
+      },
+      "post": {
+        "tags": ["Settings"],
+        "summary": "Save settings",
+        "description": "Update application settings (admin only)",
+        "security": [{"sessionAuth": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {"type": "string"}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Settings saved",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/Success"}
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"},
+          "403": {"description": "Admin access required"}
+        }
+      }
+    },
+    "/api/settings/schema": {
+      "get": {
+        "tags": ["Settings"],
+        "summary": "Get settings schema",
+        "description": "Get the schema for settings form",
+        "security": [{"sessionAuth": []}],
+        "responses": {
+          "200": {
+            "description": "Settings schema",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "category": {"type": "string"},
+                      "label": {"type": "string"},
+                      "fields": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "key": {"type": "string"},
+                            "label": {"type": "string"},
+                            "type": {"type": "string"},
+                            "hint": {"type": "string"},
+                            "options": {"type": "array"}
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"}
+        }
+      }
+    },
+    "/api/settings/test-ldap": {
+      "post": {
+        "tags": ["Settings"],
+        "summary": "Test LDAP connection",
+        "description": "Test LDAP connection with optional user credentials",
+        "security": [{"sessionAuth": []}],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "test_username": {"type": "string"},
+                  "test_password": {"type": "string"}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Test results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {"type": "boolean"},
+                    "steps": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "msg": {"type": "string"},
+                          "ok": {"type": "boolean"}
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"}
+        }
+      }
+    },
+    "/api/users": {
+      "get": {
+        "tags": ["Users"],
+        "summary": "List users",
+        "description": "Get all local users",
+        "security": [{"sessionAuth": []}],
+        "responses": {
+          "200": {
+            "description": "List of users",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {"$ref": "#/components/schemas/User"}
+                }
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"}
+        }
+      },
+      "post": {
+        "tags": ["Users"],
+        "summary": "Create user",
+        "description": "Create a new local user (admin only)",
+        "security": [{"sessionAuth": []}],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["username", "password"],
+                "properties": {
+                  "username": {"type": "string"},
+                  "password": {"type": "string"},
+                  "role": {"type": "string", "enum": ["admin", "readonly"], "default": "admin"}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User created",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/User"}
+              }
+            }
+          },
+          "400": {"description": "Invalid input"},
+          "401": {"description": "Not authenticated"},
+          "403": {"description": "Admin access required"},
+          "409": {"description": "Username already exists"}
+        }
+      }
+    },
+    "/api/users/{user_id}": {
+      "put": {
+        "tags": ["Users"],
+        "summary": "Update user",
+        "description": "Update user password or role (admin only)",
+        "security": [{"sessionAuth": []}],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "integer"}
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "password": {"type": "string"},
+                  "role": {"type": "string", "enum": ["admin", "readonly"]}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "User updated",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/Success"}
+              }
+            }
+          },
+          "400": {"description": "Invalid input"},
+          "401": {"description": "Not authenticated"},
+          "403": {"description": "Admin access required"},
+          "404": {"description": "User not found"}
+        }
+      },
+      "delete": {
+        "tags": ["Users"],
+        "summary": "Delete user",
+        "description": "Delete a user (admin only)",
+        "security": [{"sessionAuth": []}],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {"type": "integer"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User deleted",
+            "content": {
+              "application/json": {
+                "schema": {"$ref": "#/components/schemas/Success"}
+              }
+            }
+          },
+          "400": {"description": "Cannot delete last user/admin"},
+          "401": {"description": "Not authenticated"},
+          "403": {"description": "Admin access required"},
+          "404": {"description": "User not found"}
+        }
+      }
+    },
+    "/api/audit": {
+      "get": {
+        "tags": ["Audit"],
+        "summary": "Get audit logs",
+        "description": "Get paginated audit logs with optional filters",
+        "security": [{"sessionAuth": []}],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {"type": "integer", "default": 1}
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "schema": {"type": "integer", "default": 50}
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "schema": {"type": "string"},
+            "description": "Filter by action (partial match)"
+          },
+          {
+            "name": "user",
+            "in": "query",
+            "schema": {"type": "string"},
+            "description": "Filter by user (partial match)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit logs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "logs": {
+                      "type": "array",
+                      "items": {"$ref": "#/components/schemas/AuditLog"}
+                    },
+                    "total": {"type": "integer"},
+                    "page": {"type": "integer"},
+                    "per_page": {"type": "integer"}
+                  }
+                }
+              }
+            }
+          },
+          "401": {"description": "Not authenticated"}
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "sessionAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "session",
+        "description": "Session-based authentication. Login via /api/login first."
+      }
+    },
+    "schemas": {
+      "Success": {
+        "type": "object",
+        "properties": {
+          "ok": {"type": "boolean", "example": true}
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "ok": {"type": "boolean", "example": false},
+          "error": {"type": "string", "example": "Error message"}
+        }
+      },
+      "Host": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "integer", "example": 1},
+          "name": {"type": "string", "example": "web-server-01"},
+          "address": {"type": "string", "example": "192.168.1.10"},
+          "groups": {"type": "string", "example": "web, production"},
+          "variables": {"type": "string", "example": "{\"ansible_user\": \"root\"}"},
+          "os_type": {"type": "string", "enum": ["linux", "windows"], "example": "linux"},
+          "created_at": {"type": "string", "format": "date-time"},
+          "reachable": {"type": "boolean", "nullable": true},
+          "last_ping": {"type": "string", "format": "date-time", "nullable": true},
+          "ping_latency": {"type": "number", "nullable": true}
+        }
+      },
+      "HostInput": {
+        "type": "object",
+        "required": ["name", "address"],
+        "properties": {
+          "name": {"type": "string", "example": "web-server-01"},
+          "address": {"type": "string", "example": "192.168.1.10"},
+          "groups": {"type": "string", "example": "web, production"},
+          "variables": {"type": "object", "example": {"ansible_user": "root"}},
+          "os_type": {"type": "string", "enum": ["linux", "windows"], "default": "linux"}
+        }
+      },
+      "Folder": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "integer"},
+          "name": {"type": "string"},
+          "created_at": {"type": "string", "format": "date-time"}
+        }
+      },
+      "Playbook": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "integer"},
+          "name": {"type": "string"},
+          "description": {"type": "string"},
+          "content": {"type": "string"},
+          "folder_id": {"type": "integer", "nullable": true},
+          "folder_name": {"type": "string", "nullable": true},
+          "created_at": {"type": "string", "format": "date-time"},
+          "updated_at": {"type": "string", "format": "date-time"}
+        }
+      },
+      "PlaybookInput": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {"type": "string"},
+          "description": {"type": "string"},
+          "content": {"type": "string"},
+          "folder_id": {"type": "integer", "nullable": true}
+        }
+      },
+      "PlaybookVersion": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "integer"},
+          "playbook_id": {"type": "integer"},
+          "version_num": {"type": "integer"},
+          "content": {"type": "string"},
+          "created_at": {"type": "string", "format": "date-time"},
+          "created_by": {"type": "string"}
+        }
+      },
+      "Execution": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "integer"},
+          "playbook_id": {"type": "integer"},
+          "playbook_name": {"type": "string"},
+          "host_pattern": {"type": "string"},
+          "status": {"type": "string", "enum": ["pending", "running", "success", "failed"]},
+          "output": {"type": "string"},
+          "started_at": {"type": "string", "format": "date-time"},
+          "finished_at": {"type": "string", "format": "date-time", "nullable": true},
+          "triggered_by": {"type": "string"},
+          "extra_vars": {"type": "string"},
+          "check_mode": {"type": "boolean"},
+          "tags": {"type": "string"},
+          "skip_tags": {"type": "string"}
+        }
+      },
+      "Schedule": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "integer"},
+          "name": {"type": "string"},
+          "playbook_id": {"type": "integer"},
+          "playbook_name": {"type": "string"},
+          "host_pattern": {"type": "string"},
+          "cron_expr": {"type": "string"},
+          "enabled": {"type": "boolean"},
+          "created_at": {"type": "string", "format": "date-time"},
+          "last_run_at": {"type": "string", "format": "date-time", "nullable": true},
+          "last_run_status": {"type": "string", "nullable": true},
+          "next_run_at": {"type": "string", "format": "date-time", "nullable": true}
+        }
+      },
+      "ScheduleInput": {
+        "type": "object",
+        "required": ["name", "playbook_id", "cron_expr"],
+        "properties": {
+          "name": {"type": "string"},
+          "playbook_id": {"type": "integer"},
+          "host_pattern": {"type": "string", "default": "all"},
+          "cron_expr": {"type": "string", "example": "0 2 * * *"},
+          "enabled": {"type": "boolean", "default": true}
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "integer"},
+          "username": {"type": "string"},
+          "role": {"type": "string", "enum": ["admin", "readonly"]},
+          "is_ldap": {"type": "boolean"},
+          "created_at": {"type": "string", "format": "date-time"}
+        }
+      },
+      "AuditLog": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "integer"},
+          "action": {"type": "string"},
+          "user": {"type": "string"},
+          "target_type": {"type": "string"},
+          "target_id": {"type": "integer", "nullable": true},
+          "target_name": {"type": "string"},
+          "details": {"type": "string"},
+          "ip_address": {"type": "string"},
+          "created_at": {"type": "string", "format": "date-time"}
+        }
+      }
+    }
+  }
+}

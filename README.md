@@ -58,6 +58,57 @@ python run.py
 | `SECRET_KEY` | Clé secrète Flask | `change-me-in-production` |
 | `DATABASE_URL` | URI SQLAlchemy | `sqlite:///ansible_gui.db` |
 
+### PostgreSQL Support
+
+By default, Ansible GUI uses SQLite. To use PostgreSQL instead, set the `DATABASE_URL` environment variable:
+
+```bash
+# PostgreSQL connection string format
+export DATABASE_URL="postgresql://user:password@localhost:5432/ansible_gui"
+
+# Or in .env file
+DATABASE_URL=postgresql://user:password@localhost:5432/ansible_gui
+```
+
+**Requirements for PostgreSQL:**
+- Install `psycopg2-binary` (included in requirements.txt)
+- Create the database before starting the application:
+  ```bash
+  createdb ansible_gui
+  ```
+
+**Example Docker Compose with PostgreSQL:**
+
+```yaml
+version: '3.8'
+services:
+  app:
+    build: .
+    environment:
+      - DATABASE_URL=postgresql://ansible:ansible@db:5432/ansible_gui
+      - SECRET_KEY=your-secret-key
+    ports:
+      - "5000:5000"
+    depends_on:
+      - db
+
+  db:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=ansible
+      - POSTGRES_PASSWORD=ansible
+      - POSTGRES_DB=ansible_gui
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
+```
+
+### API Documentation
+
+Swagger/OpenAPI documentation is available at `/api/docs` when the application is running. The OpenAPI 3.0 specification is served from `/static/swagger.json`.
+
 ### Paramètres via l'interface web
 
 Tous les paramètres LDAP et SMTP se configurent depuis l'onglet **Paramètres** de l'interface :

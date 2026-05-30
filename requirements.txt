@@ -6,3 +6,5 @@ PyYAML>=6.0
 gunicorn>=21.0.0
 pywinrm>=0.4.3
 requests>=2.31.0
+flask-swagger-ui>=4.11.1
+psycopg2-binary>=2.9.9  # Optional: for PostgreSQL support

@@ -3,7 +3,7 @@ import io
 import json
 import threading
 import zipfile
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from flask import (
     Blueprint,
@@ -18,7 +18,9 @@ from flask import (
 
 from app import db
 from app.auth import authenticate, login_required, admin_required, get_role_for_user
-from app.models import AuditLog, Execution, Folder, Host, LocalUser, Playbook, PlaybookVersion, Schedule, Setting
+from app.models import AuditLog, Execution, Folder, GroupVar, Host, HostVar, LocalUser, Playbook, PlaybookVersion, Schedule, Setting
+
+APP_VERSION = "1.0.0"
 
 bp = Blueprint("main", __name__)
 
@@ -83,6 +85,8 @@ SETTINGS_SCHEMA = [
         "fields": [
             {"key": "ping_interval", "label": "Ping Interval (seconds)", "type": "text"},
             {"key": "ping_timeout", "label": "Ping Timeout (seconds)", "type": "text"},
+            {"key": "max_concurrent_executions", "label": "Max Concurrent Executions", "type": "text",
+             "hint": "Maximum number of playbook executions that can run simultaneously (default: 5)"},
         ],
     },
 ]
@@ -175,12 +179,93 @@ def api_dashboard():
     recent_executions = (
         Execution.query.order_by(Execution.started_at.desc()).limit(5).all()
     )
+
+    # Concurrency info
+    running_count = Execution.query.filter(
+        Execution.status.in_(["pending", "running"])
+    ).count()
+    max_concurrent = int(Setting.get("max_concurrent_executions", "5") or 5)
+
     return jsonify({
         "total_hosts": total_hosts,
         "reachable_hosts": reachable_hosts,
         "total_playbooks": total_playbooks,
         "total_executions": total_executions,
         "recent_executions": [e.to_dict() for e in recent_executions],
+        "running_executions": running_count,
+        "max_concurrent_executions": max_concurrent,
+    })
+
+
+@bp.route("/api/stats")
+@login_required
+def api_stats():
+    """Return statistics for dashboard graphs."""
+    # Basic counts
+    total_hosts = Host.query.count()
+    total_playbooks = Playbook.query.count()
+    total_executions = Execution.query.count()
+
+    # Success/failure ratio
+    success_count = Execution.query.filter_by(status="success").count()
+    failed_count = Execution.query.filter_by(status="failed").count()
+    other_count = total_executions - success_count - failed_count
+
+    # Executions per day for last 30 days
+    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+    executions_last_30 = Execution.query.filter(
+        Execution.started_at >= thirty_days_ago
+    ).all()
+
+    # Group by date
+    executions_by_day = {}
+    for e in executions_last_30:
+        if e.started_at:
+            day = e.started_at.strftime("%Y-%m-%d")
+            if day not in executions_by_day:
+                executions_by_day[day] = {"total": 0, "success": 0, "failed": 0}
+            executions_by_day[day]["total"] += 1
+            if e.status == "success":
+                executions_by_day[day]["success"] += 1
+            elif e.status == "failed":
+                executions_by_day[day]["failed"] += 1
+
+    # Build list for last 30 days (fill in missing days with 0)
+    executions_per_day = []
+    for i in range(30):
+        day = (datetime.utcnow() - timedelta(days=29 - i)).strftime("%Y-%m-%d")
+        day_data = executions_by_day.get(day, {"total": 0, "success": 0, "failed": 0})
+        executions_per_day.append({
+            "date": day,
+            "total": day_data["total"],
+            "success": day_data["success"],
+            "failed": day_data["failed"],
+        })
+
+    # Top 5 most executed playbooks
+    from sqlalchemy import func
+    top_playbooks_query = (
+        db.session.query(
+            Execution.playbook_name,
+            func.count(Execution.id).label("count")
+        )
+        .filter(Execution.playbook_name.isnot(None))
+        .group_by(Execution.playbook_name)
+        .order_by(func.count(Execution.id).desc())
+        .limit(5)
+        .all()
+    )
+    top_playbooks = [{"name": name, "count": count} for name, count in top_playbooks_query]
+
+    return jsonify({
+        "total_hosts": total_hosts,
+        "total_playbooks": total_playbooks,
+        "total_executions": total_executions,
+        "success_count": success_count,
+        "failed_count": failed_count,
+        "other_count": other_count,
+        "executions_per_day": executions_per_day,
+        "top_playbooks": top_playbooks,
     })
 
 
@@ -620,6 +705,19 @@ def api_executions_get(exec_id):
 def api_executions_create():
     from app.runner import run_playbook
 
+    # Check concurrency limit
+    max_concurrent = int(Setting.get("max_concurrent_executions", "5") or 5)
+    running_count = Execution.query.filter(
+        Execution.status.in_(["pending", "running"])
+    ).count()
+
+    if running_count >= max_concurrent:
+        return jsonify({
+            "error": f"Concurrency limit reached ({running_count}/{max_concurrent} executions running)",
+            "running_count": running_count,
+            "max_concurrent": max_concurrent,
+        }), 429
+
     data = request.get_json() or {}
     pb_id = data.get("playbook_id")
     pb = Playbook.query.get(pb_id)
@@ -1014,3 +1112,238 @@ def api_settings_test_ldap():
 
     conn.unbind()
     return jsonify({"ok": True, "steps": steps})
+
+
+# ──────────────────── HEALTH CHECK ────────────────────
+
+@bp.route("/health", methods=["GET"])
+def api_health():
+    """
+    Health check endpoint - no authentication required.
+    Returns system health status including database connectivity,
+    scheduler status, and application version.
+    """
+    from app.scheduler import get_scheduler
+
+    health = {
+        "status": "healthy",
+        "version": APP_VERSION,
+        "database": "unknown",
+        "scheduler": "unknown",
+        "checks": [],
+    }
+
+    # Check database connectivity
+    try:
+        db.session.execute(db.text("SELECT 1"))
+        health["database"] = "connected"
+        health["checks"].append({"name": "database", "status": "pass"})
+    except Exception as e:
+        health["database"] = "disconnected"
+        health["status"] = "unhealthy"
+        health["checks"].append({"name": "database", "status": "fail", "error": str(e)})
+
+    # Check scheduler status
+    try:
+        scheduler = get_scheduler()
+        if scheduler and scheduler.running:
+            health["scheduler"] = "running"
+            health["checks"].append({"name": "scheduler", "status": "pass"})
+        else:
+            health["scheduler"] = "stopped"
+            health["status"] = "degraded"
+            health["checks"].append({"name": "scheduler", "status": "warn", "error": "Scheduler not running"})
+    except Exception as e:
+        health["scheduler"] = "error"
+        health["status"] = "degraded"
+        health["checks"].append({"name": "scheduler", "status": "fail", "error": str(e)})
+
+    status_code = 200 if health["status"] == "healthy" else 503 if health["status"] == "unhealthy" else 200
+    return jsonify(health), status_code
+
+
+# ──────────────────── GROUP VARIABLES ────────────────────
+
+@bp.route("/api/group-vars", methods=["GET"])
+@login_required
+def api_group_vars_list():
+    """List all group variables, optionally filtered by group name."""
+    group_name = request.args.get("group", "").strip()
+    query = GroupVar.query.order_by(GroupVar.group_name, GroupVar.var_name)
+    if group_name:
+        query = query.filter(GroupVar.group_name == group_name)
+    vars_list = query.all()
+    return jsonify([v.to_dict() for v in vars_list])
+
+
+@bp.route("/api/group-vars", methods=["POST"])
+@admin_required
+def api_group_vars_create():
+    """Create a new group variable."""
+    data = request.get_json() or {}
+    group_name = data.get("group_name", "").strip()
+    var_name = data.get("var_name", "").strip()
+    var_value = data.get("var_value", "")
+
+    if not group_name:
+        return jsonify({"error": "Group name is required"}), 400
+    if not var_name:
+        return jsonify({"error": "Variable name is required"}), 400
+
+    # Check if already exists
+    existing = GroupVar.query.filter_by(group_name=group_name, var_name=var_name).first()
+    if existing:
+        return jsonify({"error": f"Variable '{var_name}' already exists for group '{group_name}'"}), 409
+
+    gv = GroupVar(group_name=group_name, var_name=var_name, var_value=var_value)
+    db.session.add(gv)
+    db.session.commit()
+    audit("group_var_create", "group_var", gv.id, f"{group_name}:{var_name}")
+    return jsonify(gv.to_dict()), 201
+
+
+@bp.route("/api/group-vars/<int:var_id>", methods=["GET"])
+@login_required
+def api_group_vars_get(var_id):
+    """Get a specific group variable."""
+    gv = GroupVar.query.get_or_404(var_id)
+    return jsonify(gv.to_dict())
+
+
+@bp.route("/api/group-vars/<int:var_id>", methods=["PUT"])
+@admin_required
+def api_group_vars_update(var_id):
+    """Update a group variable."""
+    gv = GroupVar.query.get_or_404(var_id)
+    data = request.get_json() or {}
+
+    # Can update group_name, var_name, or var_value
+    new_group = data.get("group_name", gv.group_name).strip()
+    new_var_name = data.get("var_name", gv.var_name).strip()
+    new_value = data.get("var_value", gv.var_value)
+
+    # Check uniqueness if changing group or var name
+    if new_group != gv.group_name or new_var_name != gv.var_name:
+        existing = GroupVar.query.filter_by(group_name=new_group, var_name=new_var_name).first()
+        if existing and existing.id != var_id:
+            return jsonify({"error": f"Variable '{new_var_name}' already exists for group '{new_group}'"}), 409
+
+    gv.group_name = new_group
+    gv.var_name = new_var_name
+    gv.var_value = new_value
+    db.session.commit()
+    audit("group_var_update", "group_var", gv.id, f"{new_group}:{new_var_name}")
+    return jsonify(gv.to_dict())
+
+
+@bp.route("/api/group-vars/<int:var_id>", methods=["DELETE"])
+@admin_required
+def api_group_vars_delete(var_id):
+    """Delete a group variable."""
+    gv = GroupVar.query.get_or_404(var_id)
+    name = f"{gv.group_name}:{gv.var_name}"
+    db.session.delete(gv)
+    db.session.commit()
+    audit("group_var_delete", "group_var", var_id, name)
+    return jsonify({"ok": True})
+
+
+@bp.route("/api/group-vars/groups", methods=["GET"])
+@login_required
+def api_group_vars_groups():
+    """Get list of all unique group names that have variables defined."""
+    groups = db.session.query(GroupVar.group_name).distinct().order_by(GroupVar.group_name).all()
+    return jsonify([g[0] for g in groups])
+
+
+# ──────────────────── HOST VARIABLES ────────────────────
+
+@bp.route("/api/host-vars", methods=["GET"])
+@login_required
+def api_host_vars_list():
+    """List all host variables, optionally filtered by host name."""
+    host_name = request.args.get("host", "").strip()
+    query = HostVar.query.order_by(HostVar.host_name, HostVar.var_name)
+    if host_name:
+        query = query.filter(HostVar.host_name == host_name)
+    vars_list = query.all()
+    return jsonify([v.to_dict() for v in vars_list])
+
+
+@bp.route("/api/host-vars", methods=["POST"])
+@admin_required
+def api_host_vars_create():
+    """Create a new host variable."""
+    data = request.get_json() or {}
+    host_name = data.get("host_name", "").strip()
+    var_name = data.get("var_name", "").strip()
+    var_value = data.get("var_value", "")
+
+    if not host_name:
+        return jsonify({"error": "Host name is required"}), 400
+    if not var_name:
+        return jsonify({"error": "Variable name is required"}), 400
+
+    # Check if already exists
+    existing = HostVar.query.filter_by(host_name=host_name, var_name=var_name).first()
+    if existing:
+        return jsonify({"error": f"Variable '{var_name}' already exists for host '{host_name}'"}), 409
+
+    hv = HostVar(host_name=host_name, var_name=var_name, var_value=var_value)
+    db.session.add(hv)
+    db.session.commit()
+    audit("host_var_create", "host_var", hv.id, f"{host_name}:{var_name}")
+    return jsonify(hv.to_dict()), 201
+
+
+@bp.route("/api/host-vars/<int:var_id>", methods=["GET"])
+@login_required
+def api_host_vars_get(var_id):
+    """Get a specific host variable."""
+    hv = HostVar.query.get_or_404(var_id)
+    return jsonify(hv.to_dict())
+
+
+@bp.route("/api/host-vars/<int:var_id>", methods=["PUT"])
+@admin_required
+def api_host_vars_update(var_id):
+    """Update a host variable."""
+    hv = HostVar.query.get_or_404(var_id)
+    data = request.get_json() or {}
+
+    new_host = data.get("host_name", hv.host_name).strip()
+    new_var_name = data.get("var_name", hv.var_name).strip()
+    new_value = data.get("var_value", hv.var_value)
+
+    # Check uniqueness if changing host or var name
+    if new_host != hv.host_name or new_var_name != hv.var_name:
+        existing = HostVar.query.filter_by(host_name=new_host, var_name=new_var_name).first()
+        if existing and existing.id != var_id:
+            return jsonify({"error": f"Variable '{new_var_name}' already exists for host '{new_host}'"}), 409
+
+    hv.host_name = new_host
+    hv.var_name = new_var_name
+    hv.var_value = new_value
+    db.session.commit()
+    audit("host_var_update", "host_var", hv.id, f"{new_host}:{new_var_name}")
+    return jsonify(hv.to_dict())
+
+
+@bp.route("/api/host-vars/<int:var_id>", methods=["DELETE"])
+@admin_required
+def api_host_vars_delete(var_id):
+    """Delete a host variable."""
+    hv = HostVar.query.get_or_404(var_id)
+    name = f"{hv.host_name}:{hv.var_name}"
+    db.session.delete(hv)
+    db.session.commit()
+    audit("host_var_delete", "host_var", var_id, name)
+    return jsonify({"ok": True})
+
+
+@bp.route("/api/host-vars/hosts", methods=["GET"])
+@login_required
+def api_host_vars_hosts():
+    """Get list of all unique host names that have variables defined."""
+    hosts = db.session.query(HostVar.host_name).distinct().order_by(HostVar.host_name).all()
+    return jsonify([h[0] for h in hosts])

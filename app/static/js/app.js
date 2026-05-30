@@ -570,6 +570,20 @@ function renderFolders() {
   allBtn.onclick = () => { activeFolderId = null; renderFolders(); renderPlaybooks(); };
   list.appendChild(allBtn);
 
+  // Favorites filter
+  const favorites = playbooksData.filter(p => p.is_favorite);
+  if (favorites.length > 0) {
+    const favBtn = document.createElement('button');
+    favBtn.className = `folder-item${activeFolderId === 'favorites' ? ' active' : ''}`;
+    favBtn.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="${activeFolderId === 'favorites' ? '#ffc107' : 'none'}" stroke="#ffc107" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      <span class="folder-item-name">Favorites</span>
+      <span style="font-size:11px;color:var(--text-muted);margin-left:auto">${favorites.length}</span>
+    `;
+    favBtn.onclick = () => { activeFolderId = 'favorites'; renderFolders(); renderPlaybooks(); };
+    list.appendChild(favBtn);
+  }
+
   const unfiled = playbooksData.filter(p => !p.folder_id);
   if (unfiled.length > 0) {
     const unfiledBtn = document.createElement('button');
@@ -619,6 +633,9 @@ function renderPlaybooks() {
   let filtered = playbooksData;
   if (activeFolderId === null) {
     titleEl.textContent = 'All Playbooks';
+  } else if (activeFolderId === 'favorites') {
+    filtered = playbooksData.filter(p => p.is_favorite);
+    titleEl.textContent = 'Favorites';
   } else if (activeFolderId === 'unfiled') {
     filtered = playbooksData.filter(p => !p.folder_id);
     titleEl.textContent = 'Unfiled';
@@ -635,10 +652,21 @@ function renderPlaybooks() {
     return;
   }
 
+  // Sort: favorites first, then by name
+  filtered.sort((a, b) => {
+    if (a.is_favorite && !b.is_favorite) return -1;
+    if (!a.is_favorite && b.is_favorite) return 1;
+    return a.name.localeCompare(b.name);
+  });
+
   for (const p of filtered) {
     const folderBadge = p.folder_name
       ? `<span class="pb-folder-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:10px;height:10px"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>${p.folder_name}</span>`
       : '';
+
+    const starIcon = p.is_favorite
+      ? `<svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`
+      : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`;
 
     const card = document.createElement('div');
     card.className = 'card';
@@ -646,13 +674,21 @@ function renderPlaybooks() {
     card.innerHTML = `
       <div class="card-body">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px">
-          <div style="min-width:0">
-            <div style="font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.name}</div>
-            <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${p.description || 'No description'}</div>
+          <div style="min-width:0;display:flex;align-items:center;gap:6px">
+            <button class="btn btn-icon btn-sm" title="${p.is_favorite ? 'Remove from favorites' : 'Add to favorites'}" onclick="toggleFavorite(${p.id}, ${p.is_favorite})" style="color:${p.is_favorite ? '#ffc107' : 'var(--text-muted)'};border-color:${p.is_favorite ? 'rgba(255,193,7,0.3)' : 'var(--border-color)'}">
+              ${starIcon}
+            </button>
+            <div>
+              <div style="font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.name}</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:2px">${p.description || 'No description'}</div>
+            </div>
           </div>
           <div style="display:flex;gap:4px;flex-shrink:0">
             ${isAdmin() ? `<button class="btn btn-icon btn-sm" title="Edit" onclick="openPlaybookModal(${p.id})">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            </button>` : ''}
+            ${isAdmin() ? `<button class="btn btn-icon btn-sm" title="Duplicate" onclick="duplicatePlaybook(${p.id})">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             </button>` : ''}
             <button class="btn btn-icon btn-sm" title="History" onclick="openHistoryModal(${p.id})" style="color:var(--info);border-color:rgba(17,205,239,0.3)">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -675,6 +711,30 @@ function renderPlaybooks() {
       </div>
     `;
     container.appendChild(card);
+  }
+}
+
+async function toggleFavorite(pbId, currentState) {
+  const method = currentState ? 'DELETE' : 'POST';
+  const res = await api(method, `/api/playbooks/${pbId}/favorite`);
+  if (res.ok) {
+    toast(currentState ? 'Removed from favorites' : 'Added to favorites', 'success');
+    loadPlaybooks();
+  } else {
+    toast('Failed to update favorite', 'error');
+  }
+}
+
+async function duplicatePlaybook(pbId) {
+  const res = await api('POST', `/api/playbooks/${pbId}/duplicate`);
+  if (res.ok) {
+    const newPb = await res.json();
+    toast('Playbook duplicated', 'success');
+    loadPlaybooks();
+    // Open the new playbook in edit modal
+    setTimeout(() => openPlaybookModal(newPb.id), 300);
+  } else {
+    toast('Failed to duplicate playbook', 'error');
   }
 }
 

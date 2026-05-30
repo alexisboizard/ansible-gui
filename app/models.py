@@ -1,8 +1,9 @@
 import hashlib
 import os
 from datetime import datetime
+
 from app import db
-from app.encryption import encrypt_value, decrypt_value
+from app.encryption import decrypt_value, encrypt_value
 
 # Sensitive keys that should be encrypted
 SENSITIVE_SETTINGS = {

@@ -42,10 +42,11 @@ def _ping_job():
 
 def execute_scheduled_playbook(schedule_id):
     """Run a scheduled playbook execution."""
+    import threading
+    from datetime import datetime
+
     from app.models import Execution, Schedule, db
     from app.runner import run_playbook
-    from datetime import datetime
-    import threading
 
     with _app.app_context():
         schedule = Schedule.query.get(schedule_id)

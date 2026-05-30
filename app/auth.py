@@ -1,6 +1,8 @@
 import logging
+
 from flask import session
-from app.models import Setting, LocalUser
+
+from app.models import LocalUser, Setting
 
 log = logging.getLogger(__name__)
 
@@ -36,8 +38,8 @@ def _local_auth(username, password):
 
 def _ldap_auth(username, password):
     try:
-        from ldap3 import Server, Connection, ALL, SIMPLE, SUBTREE
-        from ldap3.core.exceptions import LDAPException, LDAPBindError
+        from ldap3 import ALL, SIMPLE, SUBTREE, Connection, Server
+        from ldap3.core.exceptions import LDAPBindError, LDAPException
 
         server_addr = Setting.get("ldap_server", "")
         port = int(Setting.get("ldap_port", "389") or 389)
@@ -141,6 +143,7 @@ def get_role_for_user(username):
 
 def login_required(f):
     from functools import wraps
+
     from flask import redirect, url_for
 
     @wraps(f)
@@ -154,6 +157,7 @@ def login_required(f):
 
 def admin_required(f):
     from functools import wraps
+
     from flask import jsonify
 
     @wraps(f)

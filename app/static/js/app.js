@@ -53,6 +53,8 @@ function showPage(name) {
   if (name === 'inventory') loadHosts();
   if (name === 'variables') loadVariables();
   if (name === 'playbooks') loadPlaybooks();
+  if (name === 'roles') loadRoles();
+  if (name === 'dynamic-inventory') loadDynamicInventories();
   if (name === 'executions') loadExecutions();
   if (name === 'schedules') loadSchedules();
   if (name === 'settings') loadSettings();
@@ -743,12 +745,23 @@ function openPlaybookModal(id = null) {
         lineWrapping: false,
         autoCloseBrackets: true,
         matchBrackets: true,
-        extraKeys: { Tab: (cm) => cm.replaceSelection('  ') },
+        extraKeys: {
+          Tab: (cm) => cm.replaceSelection('  '),
+          'Ctrl-Space': (cm) => cm.showHint({ hint: ansibleHint }),
+        },
+        hintOptions: { hint: ansibleHint },
       });
       // Force set the value to ensure correct content
       cmEditor.setValue(newContent);
       cmEditor.refresh();
       cmEditor.clearHistory();
+
+      // Auto-trigger hints after certain characters
+      cmEditor.on('inputRead', (cm, change) => {
+        if (change.text[0] === ':' || change.text[0] === '-') {
+          setTimeout(() => cm.showHint({ hint: ansibleHint, completeSingle: false }), 100);
+        }
+      });
     });
   });
 }
@@ -1705,10 +1718,403 @@ async function deleteHostVar(id) {
   else { toast('Failed to delete variable', 'error'); }
 }
 
+// ── Roles ─────────────────────────────────────────────────────────────────────
+
+let rolesData = [];
+
+async function loadRoles() {
+  const res = await api('GET', '/api/roles');
+  rolesData = await res.json();
+  renderRoles();
+}
+
+function renderRoles() {
+  const tbody = document.getElementById('roles-tbody');
+  tbody.innerHTML = '';
+
+  if (rolesData.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4z"/></svg>
+      <p>No roles installed. Install roles from Ansible Galaxy or Git.</p></div></td></tr>`;
+    return;
+  }
+
+  for (const r of rolesData) {
+    const fullName = r.namespace ? `${r.namespace}.${r.name}` : r.name;
+    const sourceBadge = r.source === 'galaxy'
+      ? '<span class="badge badge-info">Galaxy</span>'
+      : '<span class="badge badge-warning">Git</span>';
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><strong>${r.name}</strong></td>
+      <td>${r.namespace || '—'}</td>
+      <td>${sourceBadge}</td>
+      <td><code style="font-size:12px">${r.version || 'latest'}</code></td>
+      <td>${fmtDate(r.installed_at)}</td>
+      <td>
+        ${isAdmin() ? `
+        <button class="btn btn-icon btn-sm" title="Uninstall" onclick="deleteRole(${r.id})" style="color:var(--danger);border-color:rgba(245,54,92,0.3)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
+        </button>` : ''}
+      </td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+function openInstallRoleModal() {
+  document.getElementById('role-source').value = 'galaxy';
+  document.getElementById('role-name').value = '';
+  document.getElementById('role-version').value = '';
+  showModal('role-install-modal');
+}
+
+async function installRole() {
+  const source = document.getElementById('role-source').value;
+  const name = document.getElementById('role-name').value.trim();
+  const version = document.getElementById('role-version').value.trim();
+
+  if (!name) { toast('Role name is required', 'error'); return; }
+
+  toast('Installing role...', 'info');
+  const res = await api('POST', '/api/roles/install', { source, name, version });
+
+  if (res.ok) {
+    toast('Role installed successfully', 'success');
+    closeModal('role-install-modal');
+    loadRoles();
+  } else {
+    const err = await res.json().catch(() => ({}));
+    toast(err.error || 'Failed to install role', 'error');
+  }
+}
+
+async function deleteRole(id) {
+  if (!confirm('Uninstall this role?')) return;
+  const res = await api('DELETE', `/api/roles/${id}`);
+  if (res.ok) { toast('Role uninstalled', 'success'); loadRoles(); }
+  else { toast('Failed to uninstall role', 'error'); }
+}
+
+function openGalaxySearchModal() {
+  document.getElementById('galaxy-search-query').value = '';
+  document.getElementById('galaxy-search-results').innerHTML = '<div style="color:var(--text-muted);padding:16px;text-align:center">Enter a search query above</div>';
+  showModal('galaxy-search-modal');
+}
+
+async function searchGalaxy() {
+  const query = document.getElementById('galaxy-search-query').value.trim();
+  if (!query) { toast('Enter a search query', 'error'); return; }
+
+  const resultsEl = document.getElementById('galaxy-search-results');
+  resultsEl.innerHTML = '<div style="color:var(--text-muted);padding:16px;text-align:center">Searching...</div>';
+
+  const res = await api('POST', '/api/roles/search', { query });
+  if (!res.ok) {
+    resultsEl.innerHTML = '<div style="color:var(--danger);padding:16px">Search failed</div>';
+    return;
+  }
+
+  const results = await res.json();
+  if (results.length === 0) {
+    resultsEl.innerHTML = '<div style="color:var(--text-muted);padding:16px;text-align:center">No results found</div>';
+    return;
+  }
+
+  resultsEl.innerHTML = '';
+  for (const r of results) {
+    const fullName = r.namespace ? `${r.namespace}.${r.name}` : r.name;
+    const item = document.createElement('div');
+    item.style.cssText = 'padding:12px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;align-items:center';
+    item.innerHTML = `
+      <div style="min-width:0">
+        <strong>${fullName}</strong>
+        <div style="font-size:12px;color:var(--text-secondary);margin-top:2px">${r.description || 'No description'}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Downloads: ${r.download_count?.toLocaleString() || 0}</div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="installFromGalaxy('${fullName}')">Install</button>
+    `;
+    resultsEl.appendChild(item);
+  }
+}
+
+async function installFromGalaxy(name) {
+  closeModal('galaxy-search-modal');
+  toast('Installing role...', 'info');
+  const res = await api('POST', '/api/roles/install', { source: 'galaxy', name, version: '' });
+
+  if (res.ok) {
+    toast('Role installed successfully', 'success');
+    loadRoles();
+  } else {
+    const err = await res.json().catch(() => ({}));
+    toast(err.error || 'Failed to install role', 'error');
+  }
+}
+
+// ── Dynamic Inventory ─────────────────────────────────────────────────────────
+
+let dynamicInvData = [];
+let dynamicInvTemplates = [];
+let cmDynamicInv = null;
+
+async function loadDynamicInventories() {
+  const res = await api('GET', '/api/dynamic-inventories');
+  dynamicInvData = await res.json();
+  renderDynamicInventories();
+}
+
+function renderDynamicInventories() {
+  const tbody = document.getElementById('dynamic-inv-tbody');
+  tbody.innerHTML = '';
+
+  if (dynamicInvData.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+      <p>No dynamic inventories configured.</p></div></td></tr>`;
+    return;
+  }
+
+  for (const inv of dynamicInvData) {
+    const typeBadge = inv.inv_type === 'script'
+      ? '<span class="badge badge-warning">Script</span>'
+      : '<span class="badge badge-info">Plugin</span>';
+    const statusBadge = inv.enabled
+      ? '<span class="badge badge-success">Enabled</span>'
+      : '<span class="badge badge-muted">Disabled</span>';
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><strong>${inv.name}</strong></td>
+      <td>${typeBadge}</td>
+      <td>${statusBadge}</td>
+      <td>${fmtDate(inv.updated_at)}</td>
+      <td>
+        <div style="display:flex;gap:4px">
+          <button class="btn btn-icon btn-sm" title="Test" onclick="testDynamicInvById(${inv.id})" style="color:var(--info)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          </button>
+          ${isAdmin() ? `
+          <button class="btn btn-icon btn-sm" title="Edit" onclick="openDynamicInvModal(${inv.id})">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </button>
+          <button class="btn btn-icon btn-sm" title="Delete" onclick="deleteDynamicInv(${inv.id})" style="color:var(--danger);border-color:rgba(245,54,92,0.3)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M9 6V4h6v2"/></svg>
+          </button>` : ''}
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+async function openDynamicInvModal(id = null) {
+  const inv = id ? dynamicInvData.find(i => i.id === id) : null;
+  const defaultContent = inv ? inv.content : '#!/usr/bin/env python3\nimport json\nimport sys\n\n# Dynamic inventory script\nif len(sys.argv) > 1 and sys.argv[1] == "--list":\n    print(json.dumps({"_meta": {"hostvars": {}}}))\n';
+
+  document.getElementById('dynamic-inv-modal-title').textContent = inv ? 'Edit Dynamic Inventory' : 'New Dynamic Inventory';
+  document.getElementById('dynamic-inv-id').value = inv ? inv.id : '';
+  document.getElementById('dynamic-inv-name').value = inv ? inv.name : '';
+  document.getElementById('dynamic-inv-type').value = inv ? inv.inv_type : 'script';
+
+  // Load templates
+  if (dynamicInvTemplates.length === 0) {
+    try {
+      const res = await api('GET', '/api/dynamic-inventories/templates');
+      dynamicInvTemplates = await res.json();
+    } catch (e) { }
+  }
+
+  const templateSelect = document.getElementById('dynamic-inv-template');
+  templateSelect.innerHTML = '<option value="">— Select template —</option>';
+  for (const t of dynamicInvTemplates) {
+    const opt = document.createElement('option');
+    opt.value = t.name;
+    opt.textContent = t.name;
+    templateSelect.appendChild(opt);
+  }
+
+  // Destroy existing editor
+  if (cmDynamicInv) {
+    cmDynamicInv.toTextArea();
+    cmDynamicInv = null;
+  }
+
+  const textarea = document.getElementById('dynamic-inv-content');
+  textarea.value = defaultContent;
+
+  showModal('dynamic-inv-modal');
+
+  // Initialize CodeMirror
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const mode = (inv ? inv.inv_type : 'script') === 'script' ? 'python' : 'yaml';
+      cmDynamicInv = CodeMirror.fromTextArea(textarea, {
+        mode: mode,
+        theme: 'dracula',
+        lineNumbers: true,
+        indentUnit: 2,
+        tabSize: 2,
+        indentWithTabs: false,
+        lineWrapping: false,
+      });
+      cmDynamicInv.setValue(defaultContent);
+      cmDynamicInv.refresh();
+    });
+  });
+}
+
+function loadDynamicInvTemplate() {
+  const templateName = document.getElementById('dynamic-inv-template').value;
+  if (!templateName) return;
+
+  const template = dynamicInvTemplates.find(t => t.name === templateName);
+  if (template && cmDynamicInv) {
+    document.getElementById('dynamic-inv-type').value = template.inv_type;
+    cmDynamicInv.setOption('mode', template.inv_type === 'script' ? 'python' : 'yaml');
+    cmDynamicInv.setValue(template.content);
+  }
+}
+
+async function saveDynamicInv() {
+  const id = document.getElementById('dynamic-inv-id').value;
+  const content = cmDynamicInv ? cmDynamicInv.getValue() : document.getElementById('dynamic-inv-content').value;
+
+  const data = {
+    name: document.getElementById('dynamic-inv-name').value.trim(),
+    inv_type: document.getElementById('dynamic-inv-type').value,
+    content,
+    enabled: true,
+  };
+
+  if (!data.name) { toast('Name is required', 'error'); return; }
+
+  const res = id
+    ? await api('PUT', `/api/dynamic-inventories/${id}`, data)
+    : await api('POST', '/api/dynamic-inventories', data);
+
+  if (res.ok) {
+    toast(id ? 'Inventory updated' : 'Inventory created', 'success');
+    closeModal('dynamic-inv-modal');
+    loadDynamicInventories();
+  } else {
+    const err = await res.json().catch(() => ({}));
+    toast(err.error || 'Failed to save inventory', 'error');
+  }
+}
+
+async function deleteDynamicInv(id) {
+  if (!confirm('Delete this dynamic inventory?')) return;
+  const res = await api('DELETE', `/api/dynamic-inventories/${id}`);
+  if (res.ok) { toast('Inventory deleted', 'success'); loadDynamicInventories(); }
+  else { toast('Failed to delete inventory', 'error'); }
+}
+
+async function testDynamicInv() {
+  const id = document.getElementById('dynamic-inv-id').value;
+  if (!id) {
+    toast('Save the inventory first before testing', 'error');
+    return;
+  }
+  await testDynamicInvById(parseInt(id));
+}
+
+async function testDynamicInvById(id) {
+  document.getElementById('dynamic-inv-test-output').textContent = 'Running test...';
+  showModal('dynamic-inv-test-modal');
+
+  const res = await api('POST', `/api/dynamic-inventories/${id}/test`);
+  const data = await res.json();
+
+  const outputEl = document.getElementById('dynamic-inv-test-output');
+  if (data.ok) {
+    outputEl.textContent = data.output || '(empty output)';
+  } else {
+    outputEl.textContent = `ERROR:\n${data.error || 'Unknown error'}\n\nOutput:\n${data.output || ''}`;
+  }
+}
+
+// ── Ansible Autocompletion ────────────────────────────────────────────────────
+
+let ansibleModules = [];
+
+async function loadAnsibleModules() {
+  try {
+    const res = await api('GET', '/api/ansible/modules');
+    ansibleModules = await res.json();
+  } catch (e) { }
+}
+
+function ansibleHint(cm) {
+  const cur = cm.getCursor();
+  const token = cm.getTokenAt(cur);
+  const line = cm.getLine(cur.line);
+  const start = token.start;
+  const end = cur.ch;
+  const word = token.string.slice(0, end - start).toLowerCase();
+
+  const topLevelKeys = [
+    'hosts', 'tasks', 'vars', 'handlers', 'roles', 'become', 'become_user',
+    'gather_facts', 'pre_tasks', 'post_tasks', 'environment', 'collections',
+    'name', 'when', 'loop', 'with_items', 'register', 'notify', 'tags',
+    'block', 'rescue', 'always', 'ignore_errors', 'changed_when', 'failed_when',
+    'delegate_to', 'run_once', 'serial', 'strategy', 'any_errors_fatal',
+  ];
+
+  const ansibleVars = [
+    'ansible_host', 'ansible_user', 'ansible_password', 'ansible_port',
+    'ansible_connection', 'ansible_become', 'ansible_become_user',
+    'inventory_hostname', 'inventory_hostname_short', 'groups', 'group_names',
+    'hostvars', 'ansible_facts', 'ansible_distribution', 'ansible_os_family',
+  ];
+
+  let list = [];
+
+  // Check context
+  const trimmed = line.trim();
+  const indent = line.length - line.trimStart().length;
+
+  // Module suggestions (after "- " at task level)
+  if (trimmed.startsWith('- ') && indent >= 4) {
+    list = ansibleModules.map(m => ({
+      text: m.name + ':',
+      displayText: m.name + ' — ' + m.desc,
+    }));
+  }
+  // Top-level or task keys
+  else if (indent <= 4 || trimmed.startsWith('-')) {
+    list = topLevelKeys.filter(k => k.startsWith(word)).map(k => k + ':');
+  }
+  // Variable suggestions inside {{ }}
+  else if (line.includes('{{')) {
+    list = ansibleVars.filter(v => v.startsWith(word));
+  }
+  // Module names
+  else {
+    const moduleNames = ansibleModules.map(m => m.name);
+    list = moduleNames.filter(m => m.startsWith(word)).map(m => m + ':');
+  }
+
+  if (word.length > 0) {
+    list = list.filter(item => {
+      const text = typeof item === 'string' ? item : item.text;
+      return text.toLowerCase().startsWith(word);
+    });
+  }
+
+  return {
+    list: list.slice(0, 15),
+    from: CodeMirror.Pos(cur.line, start),
+    to: CodeMirror.Pos(cur.line, end),
+  };
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', async () => {
   initTheme();
   await initMe();
+  loadAnsibleModules();
   showPage('dashboard');
 });

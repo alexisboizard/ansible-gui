@@ -1,6 +1,8 @@
 import csv
 import io
 import json
+import os
+import stat
 import threading
 import zipfile
 from datetime import datetime, timedelta
@@ -18,7 +20,7 @@ from flask import (
 
 from app import db
 from app.auth import authenticate, login_required, admin_required, get_role_for_user
-from app.models import AuditLog, Execution, Folder, GroupVar, Host, HostVar, LocalUser, Playbook, PlaybookVersion, Schedule, Setting
+from app.models import AuditLog, DynamicInventory, Execution, Folder, GroupVar, Host, HostVar, LocalUser, Playbook, PlaybookVersion, Role, Schedule, Setting
 
 APP_VERSION = "1.0.0"
 
@@ -1347,3 +1349,369 @@ def api_host_vars_hosts():
     """Get list of all unique host names that have variables defined."""
     hosts = db.session.query(HostVar.host_name).distinct().order_by(HostVar.host_name).all()
     return jsonify([h[0] for h in hosts])
+
+
+# ──────────────────── ANSIBLE ROLES ────────────────────
+
+@bp.route("/api/roles", methods=["GET"])
+@login_required
+def api_roles_list():
+    """List all installed roles."""
+    roles = Role.query.order_by(Role.name).all()
+    return jsonify([r.to_dict() for r in roles])
+
+
+@bp.route("/api/roles/install", methods=["POST"])
+@admin_required
+def api_roles_install():
+    """Install a role from Galaxy or Git."""
+    import subprocess
+    import os
+    from flask import current_app
+
+    data = request.get_json() or {}
+    source = data.get("source", "galaxy")
+    role_name = data.get("name", "").strip()
+    version = data.get("version", "").strip()
+
+    if not role_name:
+        return jsonify({"error": "Role name is required"}), 400
+
+    roles_path = os.path.join(current_app.instance_path, "roles")
+    os.makedirs(roles_path, exist_ok=True)
+
+    cmd = ["ansible-galaxy", "role", "install", role_name, "-p", roles_path]
+    if version:
+        cmd.extend(["--version", version])
+    if source == "git":
+        cmd = ["ansible-galaxy", "role", "install", role_name, "-p", roles_path]
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        if result.returncode != 0:
+            return jsonify({"error": result.stderr or "Installation failed"}), 400
+
+        namespace = ""
+        name_parts = role_name.split(".")
+        if len(name_parts) >= 2:
+            namespace = name_parts[0]
+            simple_name = ".".join(name_parts[1:])
+        else:
+            simple_name = role_name
+
+        role = Role(
+            name=simple_name,
+            source=source,
+            namespace=namespace,
+            version=version or "latest",
+            path=os.path.join(roles_path, role_name if source == "git" else simple_name),
+        )
+        db.session.add(role)
+        db.session.commit()
+        audit("role_install", "role", role.id, role_name)
+        return jsonify(role.to_dict()), 201
+
+    except subprocess.TimeoutExpired:
+        return jsonify({"error": "Installation timed out"}), 504
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.route("/api/roles/<int:role_id>", methods=["DELETE"])
+@admin_required
+def api_roles_delete(role_id):
+    """Uninstall/remove a role."""
+    import shutil
+    role = Role.query.get_or_404(role_id)
+    name = f"{role.namespace}.{role.name}" if role.namespace else role.name
+
+    if role.path and os.path.exists(role.path):
+        try:
+            shutil.rmtree(role.path)
+        except Exception:
+            pass
+
+    db.session.delete(role)
+    db.session.commit()
+    audit("role_delete", "role", role_id, name)
+    return jsonify({"ok": True})
+
+
+@bp.route("/api/roles/search", methods=["POST"])
+@login_required
+def api_roles_search():
+    """Search Ansible Galaxy for roles."""
+    import requests as req
+
+    data = request.get_json() or {}
+    query = data.get("query", "").strip()
+    if not query:
+        return jsonify({"error": "Query is required"}), 400
+
+    try:
+        resp = req.get(
+            "https://galaxy.ansible.com/api/v1/search/roles/",
+            params={"search": query, "page_size": 20},
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            results = resp.json().get("results", [])
+            return jsonify([{
+                "name": r.get("name", ""),
+                "namespace": r.get("namespace", ""),
+                "description": r.get("description", ""),
+                "download_count": r.get("download_count", 0),
+            } for r in results])
+        return jsonify([])
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ──────────────────── DYNAMIC INVENTORY ────────────────────
+
+@bp.route("/api/dynamic-inventories", methods=["GET"])
+@login_required
+def api_dynamic_inventories_list():
+    """List all dynamic inventories."""
+    inventories = DynamicInventory.query.order_by(DynamicInventory.name).all()
+    return jsonify([i.to_dict() for i in inventories])
+
+
+@bp.route("/api/dynamic-inventories", methods=["POST"])
+@admin_required
+def api_dynamic_inventories_create():
+    """Create a new dynamic inventory."""
+    data = request.get_json() or {}
+    name = data.get("name", "").strip()
+    if not name:
+        return jsonify({"error": "Name is required"}), 400
+
+    if DynamicInventory.query.filter_by(name=name).first():
+        return jsonify({"error": "Dynamic inventory with this name already exists"}), 409
+
+    inv = DynamicInventory(
+        name=name,
+        inv_type=data.get("inv_type", "script"),
+        content=data.get("content", ""),
+        enabled=data.get("enabled", True),
+    )
+    db.session.add(inv)
+    db.session.commit()
+    audit("dynamic_inventory_create", "dynamic_inventory", inv.id, name)
+    return jsonify(inv.to_dict()), 201
+
+
+@bp.route("/api/dynamic-inventories/<int:inv_id>", methods=["GET"])
+@login_required
+def api_dynamic_inventories_get(inv_id):
+    """Get a specific dynamic inventory."""
+    inv = DynamicInventory.query.get_or_404(inv_id)
+    return jsonify(inv.to_dict())
+
+
+@bp.route("/api/dynamic-inventories/<int:inv_id>", methods=["PUT"])
+@admin_required
+def api_dynamic_inventories_update(inv_id):
+    """Update a dynamic inventory."""
+    inv = DynamicInventory.query.get_or_404(inv_id)
+    data = request.get_json() or {}
+
+    inv.name = data.get("name", inv.name).strip()
+    inv.inv_type = data.get("inv_type", inv.inv_type)
+    inv.content = data.get("content", inv.content)
+    inv.enabled = data.get("enabled", inv.enabled)
+    db.session.commit()
+    audit("dynamic_inventory_update", "dynamic_inventory", inv.id, inv.name)
+    return jsonify(inv.to_dict())
+
+
+@bp.route("/api/dynamic-inventories/<int:inv_id>", methods=["DELETE"])
+@admin_required
+def api_dynamic_inventories_delete(inv_id):
+    """Delete a dynamic inventory."""
+    inv = DynamicInventory.query.get_or_404(inv_id)
+    name = inv.name
+    db.session.delete(inv)
+    db.session.commit()
+    audit("dynamic_inventory_delete", "dynamic_inventory", inv_id, name)
+    return jsonify({"ok": True})
+
+
+@bp.route("/api/dynamic-inventories/<int:inv_id>/test", methods=["POST"])
+@login_required
+def api_dynamic_inventories_test(inv_id):
+    """Test a dynamic inventory and return the output."""
+    import subprocess
+    import tempfile
+    import stat
+
+    inv = DynamicInventory.query.get_or_404(inv_id)
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        if inv.inv_type == "script":
+            script_path = os.path.join(tmpdir, "inventory.py")
+            with open(script_path, "w") as f:
+                f.write(inv.content)
+            os.chmod(script_path, stat.S_IRWXU)
+
+            try:
+                result = subprocess.run(
+                    [script_path, "--list"],
+                    capture_output=True, text=True, timeout=30, cwd=tmpdir
+                )
+                return jsonify({
+                    "ok": result.returncode == 0,
+                    "output": result.stdout,
+                    "error": result.stderr,
+                })
+            except subprocess.TimeoutExpired:
+                return jsonify({"ok": False, "error": "Script timed out"})
+            except Exception as e:
+                return jsonify({"ok": False, "error": str(e)})
+        else:
+            config_path = os.path.join(tmpdir, "inventory.yml")
+            with open(config_path, "w") as f:
+                f.write(inv.content)
+
+            try:
+                result = subprocess.run(
+                    ["ansible-inventory", "-i", config_path, "--list"],
+                    capture_output=True, text=True, timeout=30, cwd=tmpdir
+                )
+                return jsonify({
+                    "ok": result.returncode == 0,
+                    "output": result.stdout,
+                    "error": result.stderr,
+                })
+            except subprocess.TimeoutExpired:
+                return jsonify({"ok": False, "error": "Inventory parsing timed out"})
+            except Exception as e:
+                return jsonify({"ok": False, "error": str(e)})
+
+
+@bp.route("/api/dynamic-inventories/templates", methods=["GET"])
+@login_required
+def api_dynamic_inventory_templates():
+    """Get predefined templates for common inventory plugins."""
+    templates = [
+        {
+            "name": "AWS EC2",
+            "inv_type": "plugin",
+            "content": """plugin: amazon.aws.aws_ec2
+regions:
+  - us-east-1
+  - us-west-2
+keyed_groups:
+  - key: tags.Environment
+    prefix: env
+  - key: instance_type
+    prefix: type
+filters:
+  instance-state-name: running
+""",
+        },
+        {
+            "name": "Azure",
+            "inv_type": "plugin",
+            "content": """plugin: azure.azcollection.azure_rm
+auth_source: auto
+include_vm_resource_groups:
+  - my-resource-group
+keyed_groups:
+  - key: tags.environment | default('dev')
+    prefix: env
+""",
+        },
+        {
+            "name": "Python Script (Example)",
+            "inv_type": "script",
+            "content": """#!/usr/bin/env python3
+import json
+import sys
+
+inventory = {
+    "webservers": {
+        "hosts": ["web1.example.com", "web2.example.com"],
+        "vars": {
+            "http_port": 80
+        }
+    },
+    "databases": {
+        "hosts": ["db1.example.com"],
+        "vars": {
+            "db_port": 5432
+        }
+    },
+    "_meta": {
+        "hostvars": {}
+    }
+}
+
+if len(sys.argv) > 1 and sys.argv[1] == "--list":
+    print(json.dumps(inventory))
+elif len(sys.argv) > 1 and sys.argv[1] == "--host":
+    print(json.dumps({}))
+""",
+        },
+    ]
+    return jsonify(templates)
+
+
+# ──────────────────── ANSIBLE MODULES (for autocompletion) ────────────────────
+
+@bp.route("/api/ansible/modules", methods=["GET"])
+@login_required
+def api_ansible_modules():
+    """Return list of common Ansible modules with descriptions."""
+    modules = [
+        {"name": "apt", "desc": "Manages apt-packages (Debian/Ubuntu)"},
+        {"name": "yum", "desc": "Manages yum packages (RHEL/CentOS)"},
+        {"name": "dnf", "desc": "Manages dnf packages (Fedora/RHEL 8+)"},
+        {"name": "package", "desc": "Generic OS package manager"},
+        {"name": "pip", "desc": "Manages Python packages"},
+        {"name": "copy", "desc": "Copy files to remote locations"},
+        {"name": "template", "desc": "Template a file with Jinja2"},
+        {"name": "file", "desc": "Manage file/directory properties"},
+        {"name": "lineinfile", "desc": "Ensure line in file"},
+        {"name": "blockinfile", "desc": "Manage blocks of text in files"},
+        {"name": "service", "desc": "Manage services"},
+        {"name": "systemd", "desc": "Manage systemd units"},
+        {"name": "shell", "desc": "Execute shell commands"},
+        {"name": "command", "desc": "Execute commands (no shell)"},
+        {"name": "raw", "desc": "Execute low-level commands"},
+        {"name": "script", "desc": "Run local script on remote"},
+        {"name": "debug", "desc": "Print debug messages"},
+        {"name": "assert", "desc": "Assert conditions"},
+        {"name": "fail", "desc": "Fail with custom message"},
+        {"name": "pause", "desc": "Pause playbook execution"},
+        {"name": "wait_for", "desc": "Wait for condition"},
+        {"name": "uri", "desc": "HTTP requests"},
+        {"name": "get_url", "desc": "Download files from HTTP/FTP"},
+        {"name": "git", "desc": "Deploy from git repositories"},
+        {"name": "unarchive", "desc": "Extract archive files"},
+        {"name": "archive", "desc": "Create archive files"},
+        {"name": "user", "desc": "Manage user accounts"},
+        {"name": "group", "desc": "Manage groups"},
+        {"name": "authorized_key", "desc": "Manage SSH authorized keys"},
+        {"name": "cron", "desc": "Manage cron jobs"},
+        {"name": "mount", "desc": "Manage mounts"},
+        {"name": "docker_container", "desc": "Manage Docker containers"},
+        {"name": "docker_image", "desc": "Manage Docker images"},
+        {"name": "k8s", "desc": "Manage Kubernetes resources"},
+        {"name": "set_fact", "desc": "Set host facts"},
+        {"name": "include_vars", "desc": "Load variables from file"},
+        {"name": "include_tasks", "desc": "Include tasks from file"},
+        {"name": "import_tasks", "desc": "Import tasks statically"},
+        {"name": "include_role", "desc": "Include role dynamically"},
+        {"name": "import_role", "desc": "Import role statically"},
+        {"name": "register", "desc": "Register task output"},
+        {"name": "when", "desc": "Conditional execution"},
+        {"name": "loop", "desc": "Loop over items"},
+        {"name": "with_items", "desc": "Loop (legacy)"},
+        {"name": "notify", "desc": "Trigger handler"},
+        {"name": "handlers", "desc": "Define handlers"},
+        {"name": "block", "desc": "Group tasks with error handling"},
+        {"name": "rescue", "desc": "Handle block errors"},
+        {"name": "always", "desc": "Always execute after block"},
+    ]
+    return jsonify(modules)

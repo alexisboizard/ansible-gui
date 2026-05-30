@@ -284,6 +284,28 @@ class LocalUser(db.Model):
         return expected == self.password_hash
 
 
+class Role(db.Model):
+    """Ansible roles from Galaxy, Git, or local sources."""
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    source = db.Column(db.String(50), default="galaxy")  # galaxy, git, local
+    namespace = db.Column(db.String(255), default="")
+    version = db.Column(db.String(100), default="")
+    installed_at = db.Column(db.DateTime, default=datetime.utcnow)
+    path = db.Column(db.String(500), default="")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "source": self.source,
+            "namespace": self.namespace,
+            "version": self.version,
+            "installed_at": self.installed_at.isoformat() if self.installed_at else None,
+            "path": self.path,
+        }
+
+
 class GroupVar(db.Model):
     """Variables for Ansible host groups."""
     id = db.Column(db.Integer, primary_key=True)
@@ -327,6 +349,28 @@ class HostVar(db.Model):
             "host_name": self.host_name,
             "var_name": self.var_name,
             "var_value": self.var_value,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class DynamicInventory(db.Model):
+    """Dynamic inventory scripts or plugins."""
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False, unique=True)
+    inv_type = db.Column(db.String(50), default="script")  # script or plugin
+    content = db.Column(db.Text, default="")
+    enabled = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "inv_type": self.inv_type,
+            "content": self.content,
+            "enabled": self.enabled,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

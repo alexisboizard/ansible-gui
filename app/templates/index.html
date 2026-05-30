@@ -52,6 +52,14 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
         <span>Playbooks</span>
       </button>
+      <button class="sidebar-link" data-page="roles" onclick="showPage('roles')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>Roles</span>
+      </button>
+      <button class="sidebar-link" data-page="dynamic-inventory" onclick="showPage('dynamic-inventory')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        <span>Dynamic Inventory</span>
+      </button>
 
       <div class="nav-section-label">Automation</div>
       <button class="sidebar-link" data-page="executions" onclick="showPage('executions')">
@@ -346,6 +354,71 @@
           <div id="playbooks-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
             <div style="grid-column:1/-1;text-align:center;color:var(--text-muted);padding:24px">Loading...</div>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Roles Page ── -->
+    <section class="page" id="page-roles">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Ansible Roles</h3>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-secondary admin-only" onclick="openGalaxySearchModal()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              Search Galaxy
+            </button>
+            <button class="btn btn-primary admin-only" onclick="openInstallRoleModal()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Install Role
+            </button>
+          </div>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Namespace</th>
+                <th>Source</th>
+                <th>Version</th>
+                <th>Installed</th>
+                <th style="width:80px">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="roles-tbody">
+              <tr><td colspan="6" style="text-align:center;color:var(--text-muted);padding:24px">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Dynamic Inventory Page ── -->
+    <section class="page" id="page-dynamic-inventory">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Dynamic Inventories</h3>
+          <button class="btn btn-primary admin-only" onclick="openDynamicInvModal()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Dynamic Inventory
+          </button>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Updated</th>
+                <th style="width:120px">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="dynamic-inv-tbody">
+              <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:24px">Loading...</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </section>
@@ -961,14 +1034,136 @@
   </div>
 </div>
 
+<!-- Install Role Modal -->
+<div class="modal-overlay" id="role-install-modal">
+  <div class="modal-box" style="max-width:480px">
+    <div class="modal-header">
+      <h3 class="modal-title">Install Ansible Role</h3>
+      <button class="modal-close" onclick="closeModal('role-install-modal')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Source</label>
+        <select class="form-control" id="role-source">
+          <option value="galaxy">Ansible Galaxy</option>
+          <option value="git">Git URL</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Role Name / URL</label>
+        <input type="text" class="form-control" id="role-name" placeholder="geerlingguy.docker or git+https://...">
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Galaxy format: namespace.role_name</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Version <span style="color:var(--text-muted);font-weight:400">(optional)</span></label>
+        <input type="text" class="form-control" id="role-version" placeholder="latest">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('role-install-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="installRole()">Install</button>
+    </div>
+  </div>
+</div>
+
+<!-- Galaxy Search Modal -->
+<div class="modal-overlay" id="galaxy-search-modal">
+  <div class="modal-box" style="max-width:700px">
+    <div class="modal-header">
+      <h3 class="modal-title">Search Ansible Galaxy</h3>
+      <button class="modal-close" onclick="closeModal('galaxy-search-modal')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <div style="display:flex;gap:8px">
+          <input type="text" class="form-control" id="galaxy-search-query" placeholder="Search roles..." style="flex:1" onkeydown="if(event.key==='Enter')searchGalaxy()">
+          <button class="btn btn-primary" onclick="searchGalaxy()">Search</button>
+        </div>
+      </div>
+      <div id="galaxy-search-results" style="max-height:400px;overflow-y:auto"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Dynamic Inventory Modal -->
+<div class="modal-overlay" id="dynamic-inv-modal">
+  <div class="modal-box modal-xl">
+    <div class="modal-header">
+      <h3 class="modal-title" id="dynamic-inv-modal-title">New Dynamic Inventory</h3>
+      <button class="modal-close" onclick="closeModal('dynamic-inv-modal')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="dynamic-inv-id">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Name</label>
+          <input type="text" class="form-control" id="dynamic-inv-name" placeholder="aws-ec2">
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Type</label>
+          <select class="form-control" id="dynamic-inv-type">
+            <option value="script">Script (Python)</option>
+            <option value="plugin">Plugin (YAML)</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Template</label>
+          <select class="form-control" id="dynamic-inv-template" onchange="loadDynamicInvTemplate()">
+            <option value="">— Select template —</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group" style="margin:0">
+        <label class="form-label">Content</label>
+        <textarea id="dynamic-inv-content"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('dynamic-inv-modal')">Cancel</button>
+      <button class="btn btn-info" onclick="testDynamicInv()" style="margin-right:auto">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Test
+      </button>
+      <button class="btn btn-primary" onclick="saveDynamicInv()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Dynamic Inventory Test Modal -->
+<div class="modal-overlay" id="dynamic-inv-test-modal">
+  <div class="modal-box" style="max-width:700px">
+    <div class="modal-header">
+      <h3 class="modal-title">Test Dynamic Inventory</h3>
+      <button class="modal-close" onclick="closeModal('dynamic-inv-test-modal')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <pre class="output-terminal" id="dynamic-inv-test-output" style="max-height:400px"></pre>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('dynamic-inv-test-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- Toast Container -->
 <div class="toast-container" id="toast-container"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/yaml/yaml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.css">
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>

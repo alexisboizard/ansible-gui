@@ -915,3 +915,28 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   background: rgba(108, 99, 255, 0.1);
   border-left: 3px solid var(--primary);
 }
+
+/* CodeMirror hints / autocomplete styling */
+.CodeMirror-hints {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  font-family: 'Fira Code', monospace;
+  font-size: 13px;
+  max-height: 250px;
+  overflow-y: auto;
+  z-index: 10000;
+}
+
+.CodeMirror-hint {
+  padding: 6px 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.CodeMirror-hint-active {
+  background: var(--primary);
+  color: white;
+}

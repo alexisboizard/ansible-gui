@@ -68,6 +68,13 @@ def run_playbook(execution_id):
             env["PYTHONUNBUFFERED"] = "1"
             env["HOME"] = work_dir
 
+            # Set roles path to include installed roles
+            from flask import current_app
+            roles_path = os.path.join(current_app.instance_path, "roles")
+            if os.path.isdir(roles_path):
+                existing_roles_path = env.get("ANSIBLE_ROLES_PATH", "")
+                env["ANSIBLE_ROLES_PATH"] = f"{roles_path}:{existing_roles_path}" if existing_roles_path else roles_path
+
             # SSH key
             ssh_private_key = Setting.get("ssh_private_key", "")
             ssh_key_path = None

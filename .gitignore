@@ -1,10 +1,42 @@
+# Python
 __pycache__/
 *.py[cod]
 *.pyo
-instance/
-venv/
-.env
 *.egg-info/
 dist/
 build/
+*.egg
+.eggs/
+
+# Virtual environments
+venv/
+env/
+.venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Application
+instance/
+.env
+*.log
+*.sqlite
+
+# Testing
+.coverage
+.pytest_cache/
+htmlcov/
+.tox/
+
+# Distribution
+*.tar.gz
+*.whl

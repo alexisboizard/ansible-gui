@@ -1,0 +1,9 @@
+---
+ufw_default_incoming: deny
+ufw_default_outgoing: allow
+
+ufw_rules:
+  - rule: allow
+    port: "{{ ssh_port }}"
+    proto: tcp
+    comment: "SSH"

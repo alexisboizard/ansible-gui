@@ -1,0 +1,4 @@
+---
+snmp_community: "public"
+snmp_location: "Datacenter"
+snmp_contact: "admin@example.com"

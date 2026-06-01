@@ -1,0 +1,16 @@
+---
+- name: Masterisation Debian 13
+  hosts: all
+  become: true
+
+  vars:
+    ssh_port: 1822
+    centreon_poller_ip: "{{ centreon_poller | default('10.0.0.100') }}"
+
+  roles:
+    - common
+    - ssh
+    - firewall
+    - fail2ban
+    - centreon
+    - updates

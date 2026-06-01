@@ -1,0 +1,29 @@
+---
+- name: Installation de fail2ban
+  ansible.builtin.apt:
+    name: fail2ban
+    state: present
+
+- name: Configuration jail.local
+  ansible.builtin.template:
+    src: jail.local.j2
+    dest: /etc/fail2ban/jail.local
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart fail2ban
+
+- name: Configuration jail SSH
+  ansible.builtin.template:
+    src: jail.d/sshd.conf.j2
+    dest: /etc/fail2ban/jail.d/sshd.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart fail2ban
+
+- name: Activer et démarrer fail2ban
+  ansible.builtin.systemd:
+    name: fail2ban
+    enabled: true
+    state: started

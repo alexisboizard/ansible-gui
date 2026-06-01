@@ -1,0 +1,23 @@
+---
+- name: Installation de SNMP
+  ansible.builtin.apt:
+    name:
+      - snmpd
+      - snmp
+    state: present
+
+- name: Configuration SNMP
+  ansible.builtin.template:
+    src: snmpd.conf.j2
+    dest: /etc/snmp/snmpd.conf
+    owner: root
+    group: root
+    mode: "0600"
+    backup: true
+  notify: Restart snmpd
+
+- name: Activer et démarrer snmpd
+  ansible.builtin.systemd:
+    name: snmpd
+    enabled: true
+    state: started

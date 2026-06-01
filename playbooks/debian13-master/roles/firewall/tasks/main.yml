@@ -1,0 +1,40 @@
+---
+- name: Installation de UFW
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+
+- name: Politique par défaut - incoming
+  community.general.ufw:
+    direction: incoming
+    policy: "{{ ufw_default_incoming }}"
+
+- name: Politique par défaut - outgoing
+  community.general.ufw:
+    direction: outgoing
+    policy: "{{ ufw_default_outgoing }}"
+
+- name: Autoriser SSH sur port {{ ssh_port }}
+  community.general.ufw:
+    rule: allow
+    port: "{{ ssh_port }}"
+    proto: tcp
+    comment: "SSH"
+
+- name: Autoriser SNMP depuis Centreon poller
+  community.general.ufw:
+    rule: allow
+    port: "161"
+    proto: udp
+    from_ip: "{{ centreon_poller_ip }}"
+    comment: "SNMP Centreon"
+  when: centreon_poller_ip is defined
+
+- name: Activer UFW
+  community.general.ufw:
+    state: enabled
+
+- name: Activer UFW au démarrage
+  ansible.builtin.systemd:
+    name: ufw
+    enabled: true

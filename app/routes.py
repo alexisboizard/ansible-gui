@@ -647,16 +647,22 @@ def api_playbooks_update(pb_id):
 @bp.route("/api/playbooks/<int:pb_id>", methods=["DELETE"])
 @admin_required
 def api_playbooks_delete(pb_id):
-    pb = Playbook.query.get_or_404(pb_id)
-    name = pb.name
-    # Nullify related executions (preserve history)
-    Execution.query.filter_by(playbook_id=pb_id).update({"playbook_id": None})
-    # Delete related schedules (can't be null)
-    Schedule.query.filter_by(playbook_id=pb_id).delete()
-    db.session.delete(pb)
-    db.session.commit()
-    audit("playbook_delete", "playbook", pb_id, name)
-    return jsonify({"ok": True})
+    try:
+        pb = Playbook.query.get_or_404(pb_id)
+        name = pb.name
+        # Nullify related executions (preserve history)
+        Execution.query.filter_by(playbook_id=pb_id).update(
+            {"playbook_id": None}, synchronize_session=False
+        )
+        # Delete related schedules (can't be null)
+        Schedule.query.filter_by(playbook_id=pb_id).delete(synchronize_session=False)
+        db.session.delete(pb)
+        db.session.commit()
+        audit("playbook_delete", "playbook", pb_id, name)
+        return jsonify({"ok": True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @bp.route("/api/playbooks/<int:pb_id>/favorite", methods=["POST"])

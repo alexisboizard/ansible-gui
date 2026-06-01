@@ -878,8 +878,23 @@ async function savePlaybook() {
 async function deletePlaybook(id) {
   if (!confirm('Delete this playbook?')) return;
   const res = await api('DELETE', `/api/playbooks/${id}`);
-  if (res.ok) { toast('Playbook deleted', 'success'); loadPlaybooks(); }
-  else { toast('Failed to delete playbook', 'error'); }
+  if (res.ok) {
+    const data = await res.json();
+    if (data.ok) {
+      toast('Playbook deleted', 'success');
+      loadPlaybooks();
+    } else {
+      toast(data.error || 'Failed to delete playbook', 'error');
+    }
+  }
+  else {
+    try {
+      const data = await res.json();
+      toast(data.error || 'Failed to delete playbook', 'error');
+    } catch {
+      toast('Failed to delete playbook', 'error');
+    }
+  }
 }
 
 function exportPlaybook(id) {

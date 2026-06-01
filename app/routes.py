@@ -648,9 +648,14 @@ def api_playbooks_update(pb_id):
 @admin_required
 def api_playbooks_delete(pb_id):
     try:
-        pb = Playbook.query.get_or_404(pb_id)
-        name = pb.name
-        # Use raw SQL to avoid ORM schema issues
+        # Get playbook name first (simple query)
+        result = db.session.execute(
+            db.text("SELECT name FROM playbook WHERE id = :pid"), {"pid": pb_id}
+        ).fetchone()
+        if not result:
+            return jsonify({"ok": False, "error": "Playbook not found"}), 404
+        name = result[0]
+        # Use raw SQL to avoid ORM schema/relationship issues
         db.session.execute(
             db.text("UPDATE execution SET playbook_id = NULL WHERE playbook_id = :pid"),
             {"pid": pb_id},
@@ -658,7 +663,13 @@ def api_playbooks_delete(pb_id):
         db.session.execute(
             db.text("DELETE FROM schedule WHERE playbook_id = :pid"), {"pid": pb_id}
         )
-        db.session.delete(pb)
+        db.session.execute(
+            db.text("DELETE FROM playbook_version WHERE playbook_id = :pid"),
+            {"pid": pb_id},
+        )
+        db.session.execute(
+            db.text("DELETE FROM playbook WHERE id = :pid"), {"pid": pb_id}
+        )
         db.session.commit()
         audit("playbook_delete", "playbook", pb_id, name)
         return jsonify({"ok": True})

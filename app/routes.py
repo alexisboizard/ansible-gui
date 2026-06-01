@@ -1761,7 +1761,95 @@ def api_roles_install():
         return jsonify({"error": str(e)}), 500
 
 
-@bp.route("/api/roles/<int:role_id>", methods=["DELETE"])
+@bp.route("/api/roles/upload", methods=["POST"])
+@admin_required
+def api_roles_upload():
+    """Upload a ZIP file containing Ansible roles."""
+    import shutil
+    import tempfile
+    import zipfile as zf
+
+    from flask import current_app
+
+    if "file" not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+
+    file = request.files["file"]
+    if not file.filename or not file.filename.endswith(".zip"):
+        return jsonify({"error": "File must be a ZIP archive"}), 400
+
+    roles_path = os.path.join(current_app.instance_path, "roles")
+    os.makedirs(roles_path, exist_ok=True)
+
+    imported_roles = []
+    errors = []
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        zip_path = os.path.join(tmpdir, "roles.zip")
+        file.save(zip_path)
+
+        try:
+            with zf.ZipFile(zip_path, "r") as z:
+                z.extractall(tmpdir)
+        except zf.BadZipFile:
+            return jsonify({"error": "Invalid ZIP file"}), 400
+
+        # Find roles in the extracted content
+        # Look for directories containing tasks/main.yml (standard role structure)
+        for root, dirs, files in os.walk(tmpdir):
+            # Skip the zip file itself
+            if root == tmpdir and "roles.zip" in files:
+                continue
+
+            tasks_dir = os.path.join(root, "tasks")
+            if os.path.isdir(tasks_dir) and os.path.exists(
+                os.path.join(tasks_dir, "main.yml")
+            ):
+                role_name = os.path.basename(root)
+                dest_path = os.path.join(roles_path, role_name)
+
+                try:
+                    # Remove existing role if present
+                    if os.path.exists(dest_path):
+                        shutil.rmtree(dest_path)
+
+                    # Copy role to roles directory
+                    shutil.copytree(root, dest_path)
+
+                    # Register in database
+                    existing = Role.query.filter_by(name=role_name).first()
+                    if existing:
+                        existing.path = dest_path
+                        existing.source = "local"
+                    else:
+                        role = Role(
+                            name=role_name,
+                            source="local",
+                            namespace="",
+                            version="",
+                            path=dest_path,
+                        )
+                        db.session.add(role)
+
+                    imported_roles.append(role_name)
+                except Exception as e:
+                    errors.append(f"{role_name}: {str(e)}")
+
+    db.session.commit()
+
+    for role_name in imported_roles:
+        audit("role_upload", "role", None, role_name)
+
+    return jsonify(
+        {
+            "ok": True,
+            "imported": imported_roles,
+            "errors": errors,
+            "count": len(imported_roles),
+        }
+    )
+
+
 @admin_required
 def api_roles_delete(role_id):
     """Uninstall/remove a role."""

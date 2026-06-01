@@ -2006,6 +2006,50 @@ async function deleteRole(id) {
   else { toast('Failed to uninstall role', 'error'); }
 }
 
+async function uploadRolesZip(input) {
+  const file = input.files[0];
+  if (!file) return;
+
+  if (!file.name.endsWith('.zip')) {
+    toast('Please select a ZIP file', 'error');
+    input.value = '';
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  toast('Uploading roles...', 'info');
+
+  try {
+    const res = await fetch('/api/roles/upload', {
+      method: 'POST',
+      body: formData,
+      credentials: 'same-origin'
+    });
+
+    const data = await res.json();
+
+    if (res.ok && data.ok) {
+      if (data.count > 0) {
+        toast(`Imported ${data.count} role(s): ${data.imported.join(', ')}`, 'success');
+      } else {
+        toast('No roles found in ZIP file', 'warning');
+      }
+      if (data.errors && data.errors.length > 0) {
+        console.error('Role import errors:', data.errors);
+      }
+      loadRoles();
+    } else {
+      toast(data.error || 'Failed to upload roles', 'error');
+    }
+  } catch (e) {
+    toast('Upload failed: ' + e.message, 'error');
+  }
+
+  input.value = '';
+}
+
 function openGalaxySearchModal() {
   document.getElementById('galaxy-search-query').value = '';
   document.getElementById('galaxy-search-results').innerHTML = '<div style="color:var(--text-muted);padding:16px;text-align:center">Enter a search query above</div>';

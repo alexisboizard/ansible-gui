@@ -1,9 +1,0 @@
-# Configuration fail2ban générée par Ansible
-
-[DEFAULT]
-bantime = {{ fail2ban_bantime }}
-findtime = {{ fail2ban_findtime }}
-maxretry = {{ fail2ban_maxretry }}
-ignoreip = {{ fail2ban_ignoreip }}
-backend = systemd
-banaction = ufw

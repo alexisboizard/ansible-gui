@@ -1,4 +1,0 @@
----
-unattended_automatic_reboot: false
-unattended_automatic_reboot_time: "02:00"
-unattended_mail: ""

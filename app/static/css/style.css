@@ -975,24 +975,23 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 /* Card header row with title and actions */
 .pb-card-header {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  flex-direction: column;
+  gap: 10px;
   min-width: 0;
 }
 
 /* Title section with star and text */
 .pb-card-title-section {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
   min-width: 0;
-  flex: 1 1 auto;
-  overflow: hidden;
+  width: 100%;
 }
 
 .pb-card-title-text {
+  flex: 1;
   min-width: 0;
-  flex: 1 1 auto;
   overflow: hidden;
 }
 
@@ -1020,9 +1019,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .pb-card-actions {
   display: flex;
   gap: 4px;
-  flex-shrink: 0;
   flex-wrap: wrap;
-  justify-content: flex-end;
 }
 
 /* Card footer with folder badge and date */

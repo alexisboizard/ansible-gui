@@ -650,12 +650,14 @@ def api_playbooks_delete(pb_id):
     try:
         pb = Playbook.query.get_or_404(pb_id)
         name = pb.name
-        # Nullify related executions (preserve history)
-        Execution.query.filter_by(playbook_id=pb_id).update(
-            {"playbook_id": None}, synchronize_session=False
+        # Use raw SQL to avoid ORM schema issues
+        db.session.execute(
+            db.text("UPDATE execution SET playbook_id = NULL WHERE playbook_id = :pid"),
+            {"pid": pb_id},
         )
-        # Delete related schedules (can't be null)
-        Schedule.query.filter_by(playbook_id=pb_id).delete(synchronize_session=False)
+        db.session.execute(
+            db.text("DELETE FROM schedule WHERE playbook_id = :pid"), {"pid": pb_id}
+        )
         db.session.delete(pb)
         db.session.commit()
         audit("playbook_delete", "playbook", pb_id, name)

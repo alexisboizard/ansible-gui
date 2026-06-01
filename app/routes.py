@@ -1850,6 +1850,7 @@ def api_roles_upload():
     )
 
 
+@bp.route("/api/roles/<int:role_id>", methods=["DELETE"])
 @admin_required
 def api_roles_delete(role_id):
     """Uninstall/remove a role."""

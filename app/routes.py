@@ -655,10 +655,9 @@ def api_playbooks_delete(pb_id):
         if not result:
             return jsonify({"ok": False, "error": "Playbook not found"}), 404
         name = result[0]
-        # Use raw SQL to avoid ORM schema/relationship issues
+        # Delete all related records
         db.session.execute(
-            db.text("UPDATE execution SET playbook_id = NULL WHERE playbook_id = :pid"),
-            {"pid": pb_id},
+            db.text("DELETE FROM execution WHERE playbook_id = :pid"), {"pid": pb_id}
         )
         db.session.execute(
             db.text("DELETE FROM schedule WHERE playbook_id = :pid"), {"pid": pb_id}

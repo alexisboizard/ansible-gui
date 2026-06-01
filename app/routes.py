@@ -649,6 +649,10 @@ def api_playbooks_update(pb_id):
 def api_playbooks_delete(pb_id):
     pb = Playbook.query.get_or_404(pb_id)
     name = pb.name
+    # Nullify related executions (preserve history)
+    Execution.query.filter_by(playbook_id=pb_id).update({"playbook_id": None})
+    # Delete related schedules (can't be null)
+    Schedule.query.filter_by(playbook_id=pb_id).delete()
     db.session.delete(pb)
     db.session.commit()
     audit("playbook_delete", "playbook", pb_id, name)

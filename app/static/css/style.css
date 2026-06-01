@@ -976,7 +976,6 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .pb-card-header {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
   gap: 12px;
   min-width: 0;
 }
@@ -987,12 +986,14 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   align-items: flex-start;
   gap: 8px;
   min-width: 0;
-  flex: 1;
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .pb-card-title-text {
   min-width: 0;
-  flex: 1;
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .pb-card-name {
@@ -1002,7 +1003,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 100%;
+  display: block;
 }
 
 .pb-card-desc {
@@ -1012,6 +1013,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  display: block;
 }
 
 /* Actions buttons container */

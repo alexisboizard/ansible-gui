@@ -18,7 +18,7 @@ def _build_host_inventory(host):
     ssh_user = Setting.get("ssh_default_user", "ansible") or "ansible"
     ssh_password = Setting.get("ssh_default_password", "")
 
-    vars_str = ""
+    vars_str = f" ansible_host={host.address}"
     for k, v in variables.items():
         vars_str += f" {k}={v}"
 
@@ -27,7 +27,7 @@ def _build_host_inventory(host):
     if "ansible_password" not in variables and ssh_password:
         vars_str += f" ansible_password={ssh_password}"
 
-    return f"[target]\n{host.address}{vars_str}\n"
+    return f"[target]\n{host.name}{vars_str}\n"
 
 
 def ping_host(host):

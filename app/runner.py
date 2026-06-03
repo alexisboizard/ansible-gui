@@ -256,8 +256,8 @@ def _build_inventory(host_pattern):
         except Exception:
             variables = {}
 
-        # Build host line
-        vars_str = ""
+        # Build host line with name as identifier and ansible_host for address
+        vars_str = f" ansible_host={host.address}"
         for k, v in variables.items():
             vars_str += f" {k}={v}"
 
@@ -267,7 +267,7 @@ def _build_inventory(host_pattern):
         if "ansible_password" not in variables and ssh_password:
             vars_str += f" ansible_password={ssh_password}"
 
-        host_line = f"{host.address}{vars_str}"
+        host_line = f"{host.name}{vars_str}"
 
         host_groups = [
             sanitize_group_name(g.strip())
